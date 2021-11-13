@@ -44,16 +44,20 @@
 ;;;;   functions that got a little closer, but it still wasn't what I wanted.
 ;;;;
 ;;;;   Finally, after many false starts I got it. Below are versions that use the STRING-ENUMERATOR class that I implemented to follow Fox as well as a
-;;;;   more conventional Lisp string input stream.
+;;;;   more conventional Lisp string input stream. (Fox's StringEnumerator class returns nil when empty rather than throwing an exception.)
 ;;;;
 ;;;;   I feel satisfied after discovering the symmetry I expected. But at the same time it was very frustrating, mostly based on trial and error. I wish
 ;;;;   that I had some more theory to point me in the right direction.
+;;;;
+;;;;   See Advent of Code 2015 day 1.
 ;;;;
 (load "/home/slytobias/lisp/packages/test.lisp")
 (load "/home/slytobias/lisp/books/Concise/containers.lisp")
 
 (defpackage :balance
+  (:nicknames :b)
   (:use :common-lisp :test :containers)
+  (:export :string-enumerator :emptyp :current :advance :reset :duplicate)
   (:shadowing-import-from :containers :type :push :pop)
   (:shadow :emptyp))
 
@@ -347,7 +351,7 @@
         (t nil)))
 
 ;;;
-;;;    Final version!
+;;;    Final version! (Uh...see below)
 ;;;    
 (defun check-balanced (se)
   (labels ((check-start (se)
