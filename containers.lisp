@@ -38,11 +38,11 @@
            :array-stack :linked-stack :hash-table-stack :persistent-stack
            :queue :enqueue :dequeue :front
            :array-queue :linked-queue :recycling-queue :ring-buffer :hash-table-queue :persistent-queue
-           :collection
-           :iterator
-           :list :fill-elt :nth :insert :delete :index :slice
-           :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear
-           :persistent-linked-list)
+           :collection :contains :equals :each
+           :iterator :current :next :done
+           :list :fill-elt :add :insert :delete :nth :index :slice
+           :array-list :singly-linked-list :doubly-linked-list :hash-table-list :persistent-list
+           :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear)
   (:shadow :type :push :pop :list :nth :delete))
 
 (in-package :containers)
