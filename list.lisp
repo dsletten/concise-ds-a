@@ -112,7 +112,6 @@
 (defgeneric insert (list i obj)
   (:documentation "Insert the object at the given index. List is extended as necessary."))
 (defmethod insert :around ((l list) (i integer) obj)
-  ;; (if (typep obj (type l))
   (with-slots (fill-elt) l
     (cond ((not (or (typep obj (type-of fill-elt))
                     (typep obj (type l)))) 
@@ -157,7 +156,6 @@
 (defgeneric (setf nth) (obj list i)
   (:documentation "Assign the object at the given index."))
 (defmethod (setf nth) :around (obj (l list) (i integer))
-  ;; (if (typep obj (type l))
   (with-slots (fill-elt) l
     (cond ((not (or (typep obj (type-of fill-elt))
                     (typep obj (type l)))) 
@@ -795,17 +793,17 @@
 
 (defmethod insert ((l doubly-linked-list) (i integer) obj)
   (with-slots (store count) l
-    (cond ((zerop i) (let ((new-dcons (make-instance 'dcons :content obj)))
-                       (cond ((emptyp l) (dlink new-dcons new-dcons))
-                             (t (dlink (previous store) new-dcons)
-                                (dlink new-dcons store)))
-                       (setf store new-dcons)
-                       (incf count)))
-          ((< i count) (let ((dcons (nth-dcons l i))
-                             (new-dcons (make-instance 'dcons :content obj)))
-                         (dlink (previous dcons) new-dcons)
-                         (dlink new-dcons dcons)
-                         (incf count)))) ))
+    (let ((new-dcons (make-instance 'dcons :content obj)))
+      (cond ((zerop i)
+             (cond ((emptyp l) (dlink new-dcons new-dcons))
+                   (t (dlink (previous store) new-dcons)
+                      (dlink new-dcons store)))
+             (setf store new-dcons)
+             (incf count))
+            ((< i count) (let ((dcons (nth-dcons l i)))
+                           (dlink (previous dcons) new-dcons)
+                           (dlink new-dcons dcons)
+                           (incf count)))) )))
 
 (defmethod insert :after ((l doubly-linked-list) (i integer) obj)
   (declare (ignore obj))
@@ -977,11 +975,11 @@
 (defmethod delete ((l hash-table-list) (i integer))
   (with-slots (store) l
     (let ((count (size l)))
-      (cond ((< i count)
-             (prog1 (gethash i store)
-               (loop for j from i below (1- count)
-                     do (setf (gethash j store) (gethash (1+ j) store)))
-               (remhash (1- count) store)))) )))
+      (when (< i count)
+        (prog1 (gethash i store)
+          (loop for j from i below (1- count)
+                do (setf (gethash j store) (gethash (1+ j) store)))
+          (remhash (1- count) store)))) ))
 
 (defmethod nth ((l hash-table-list) (i integer))
   (with-slots (store) l
