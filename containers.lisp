@@ -42,8 +42,9 @@
            :iterator :current :next :done
            :list :fill-elt :add :insert :delete :nth :index :slice
            :array-list :singly-linked-list :doubly-linked-list :hash-table-list :persistent-list
-           :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear)
-  (:shadow :type :push :pop :list :nth :delete))
+           :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear
+           :list-iterator :remove :current-index :has-next :has-previous)
+  (:shadow :type :push :pop :list :nth :delete :remove))
 
 (in-package :containers)
 

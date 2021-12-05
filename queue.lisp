@@ -132,13 +132,17 @@
     (setf (aref store (mod (+ front count) (length store))) obj)
     (incf count)))
 
+;;;
+;;;    Use SUBSEQ??
+;;;    
 (defun resize (q)
   (with-slots (store front count) q
     (let* ((length (length store))
            (new-store (make-array (* 2 length) :element-type (type q))))
       (dotimes (i count)
         (setf (aref new-store i) (aref store (mod (+ front i) length))))
-      (setf store new-store front 0))))
+      (setf store new-store
+            front 0))))
 
 (defmethod dequeue ((q array-queue))
   (with-slots (store front count) q
@@ -529,6 +533,7 @@
           rear 0)))
 
 (defmethod enqueue :before ((dq hash-table-deque) obj)
+  (declare (ignore obj))
   (with-slots (rear) dq
     (unless (emptyp dq)
       (incf rear))))
@@ -546,6 +551,7 @@
       (incf front))))
 
 (defmethod enqueue* :before ((dq hash-table-deque) obj)
+  (declare (ignore obj))
   (with-slots (front) dq
     (unless (emptyp dq)
       (decf front))))

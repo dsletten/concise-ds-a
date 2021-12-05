@@ -36,11 +36,6 @@
 
 (defgeneric push (stack obj)
   (:documentation "Push an object onto the top of the stack"))
-;; (defmethod push :around ((s stack) obj)
-;;   (with-slots (type) s
-;;     (if (typep obj type)
-;;         (call-next-method)
-;;         (error "~A is not of type ~A" obj type))))
 (defmethod push :around ((s stack) obj)
   (if (typep obj (type s))
       (call-next-method)
@@ -195,9 +190,6 @@
   (with-slots (top) s
     (null top)))
 
-;; (defmethod clear ((s persistent-stack))
-;;   (with-slots (type) s
-;;     (make-instance 'persistent-stack :type type)))
 (defmethod clear ((s persistent-stack))
   (make-instance 'persistent-stack :type (type s)))
 
@@ -207,7 +199,6 @@
 
 (defmethod pop ((s persistent-stack))
   (with-slots (type top count) s
-;    (values (make-instance 'persistent-stack :top (rest top) :count (1- count)) (first top))))
     (values (make-instance 'persistent-stack :type type :top (rest top) :count (1- count)) (peek s))))
 
 (defmethod peek ((s persistent-stack))
