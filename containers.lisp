@@ -94,10 +94,10 @@
   (error "collection does not implement ITERATOR"))
 
 (defgeneric contains (collection obj &key test)
-  (:documentation "Does the collection contain the given object?"))
+  (:documentation "Does the collection contain the given object? Return that object if found."))
 (defmethod contains :around ((c collection) obj &key test)
   (declare (ignore test))
-  (if (typep obj (type c)) ; This is stricter than INDEX for lists...
+  (if (typep obj (type c))
       (call-next-method)
       (error "~A is not of type ~A" obj (type c))))
 (defmethod contains ((c collection) obj &key test)
@@ -134,8 +134,9 @@
   (declare (ignore i))
   (error "iterator does not implement CURRENT"))
 
+;;; Empty???
 (defgeneric next (iterator)
-  (:documentation "Advances iterator to the next element of the traversal."))
+  (:documentation "Advances iterator to the next element of the traversal. Returns that element or NIL if at end."))
 (defmethod next ((i iterator))
   (declare (ignore i))
   (error "iterator does not implement NEXT"))

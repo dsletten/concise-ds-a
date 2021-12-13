@@ -130,16 +130,22 @@
                  (previous iterator))))
   t)
 
-;; (defun test-add-before-backward (list-constructor &optional (count 1000))
-;;   (let ((list (funcall list-constructor)))
-;;     (fill-list list count)
-;;     (let ((iterator (list-iterator list (1- count))))
-;;       (loop for i from count downto 1
-;;             until (emptyp iterator)
-;;             do (assert (= (size list) i) () "The list should decrease in size.")
-;;                (assert (= (current-index iterator) (1- i)) () "CURRENT-INDEX should be ~D not ~D" (1- i) (current-index iterator))
-;;                (add-before iterator))))
-;;   t)
+;;
+;;    (eq (current *li*) (nth *al* (current-index *li*)))
+
+
+(defun test-add-after-empty (list-constructor &optional (count 1000))
+  (let* ((list (funcall list-constructor))
+         (iterator (list-iterator list)))
+    (loop for i from 1 upto count
+          do (add-after iterator i)
+             (assert (= (size list) i) () "The list should decrease in size.")
+             (assert (= (current-index iterator) 0) () "CURRENT-INDEX should be ~D not ~D" 0 (current-index iterator)))
+    (let ((expected (cons 1 (loop for i from count above 1 collect i))))
+      (loop for elt in expected
+            do (assert (= (current iterator) elt) () "Current element should be ~D not ~D" elt (current iterator))
+               (next iterator))))
+  t)
 
 ;; (defun test-add-before-inside-out (list-constructor &optional (count 1001))
 ;;   (let* ((list (funcall list-constructor))
@@ -168,6 +174,7 @@
    (test-remove-backward #'(lambda () (make-instance 'array-list)))
    (test-remove-inside-out #'(lambda () (make-instance 'array-list)))
    (test-add-before-empty #'(lambda () (make-instance 'array-list)))
+   (test-add-after-empty #'(lambda () (make-instance 'array-list)))
 
 ))
 
@@ -180,6 +187,7 @@
    (test-remove-backward #'(lambda () (make-instance 'singly-linked-list)))
    (test-remove-inside-out #'(lambda () (make-instance 'singly-linked-list)))
    (test-add-before-empty #'(lambda () (make-instance 'singly-linked-list)))
+   (test-add-after-empty #'(lambda () (make-instance 'singly-linked-list)))
 
 ))
 
@@ -192,6 +200,7 @@
    (test-remove-backward #'(lambda () (make-instance 'doubly-linked-list)))
    (test-remove-inside-out #'(lambda () (make-instance 'doubly-linked-list)))
    (test-add-before-empty #'(lambda () (make-instance 'doubly-linked-list)))
+   (test-add-after-empty #'(lambda () (make-instance 'doubly-linked-list)))
 
 ))
 
@@ -204,6 +213,7 @@
    (test-remove-backward #'(lambda () (make-instance 'hash-table-list)))
    (test-remove-inside-out #'(lambda () (make-instance 'hash-table-list)))
    (test-add-before-empty #'(lambda () (make-instance 'hash-table-list)))
+   (test-add-after-empty #'(lambda () (make-instance 'hash-table-list)))
 
 ))
 

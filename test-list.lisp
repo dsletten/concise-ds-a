@@ -73,13 +73,12 @@
   (let ((list (funcall list-constructor)))
     (fill-list list count)
     (loop for i from 1 to count
-          do (assert (contains list i) () "The list should contain the value ~D" i)))
+          do (assert (= (contains list i) i) () "The list should contain the value ~D" i)))
   t)
 
 (defun test-contains-test (list-constructor)
   (let ((list (funcall list-constructor)))
-    (loop for ch in #[#\a #\z]
-          do (add list ch))
+    (apply #'add list #[#\a #\z])
     (notany #'(lambda (ch) (contains list ch)) #[#\A #\Z])
     (every #'(lambda (ch) (contains list ch :test #'char-equal)) #[#\A #\Z]))
   t)
