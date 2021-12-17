@@ -119,17 +119,25 @@
 ;;;
 ;;;    ITERATOR
 ;;;
+;;;    Design conflict
+;;;    I.  Put fewer details on abstract ITERATOR allowing wider variety of subclasses.
+;;;        For example, PERSISTENT-LIST-ITERATOR can reasonably be a subclass if no
+;;;        EXPECTED-MODIFICATION-COUNT, no :AROUND methods
+;;;    II. Eliminate duplication by moving EXPECTED-MODIFICATION-COUNT, :AROUND methods up
+;;;        from subclasses. PERSISTENT-LIST-ITERATOR simply has EXPECTED-MODIFICATION-COUNT of 0???
+;;;        Kind of gross??
+;;;
 (defclass iterator ()
-  ()
+  ((expected-modification-count :type integer))
   (:documentation "External iterator for a collection."))
 
 ;;; FIRST, REWIND???
 (defgeneric current (iterator)
   (:documentation "Returns the current element of the iterator traversal."))
 (defmethod current :around ((i iterator))
-  (if (done i)
-      (error "Iteration already finished")
-      (call-next-method)))
+  (cond ((done i) (error "Iteration already finished"))
+        ((co-modified i) (error "Iterator invalid due to structural modification of collection"))
+        (t (call-next-method))))
 (defmethod current ((i iterator))
   (declare (ignore i))
   (error "iterator does not implement CURRENT"))
@@ -137,12 +145,30 @@
 ;;; Empty???
 (defgeneric next (iterator)
   (:documentation "Advances iterator to the next element of the traversal. Returns that element or NIL if at end."))
+(defmethod next :around ((i iterator))
+  (if (co-modified i)
+      (error "Iterator invalid due to structural modification of collection")
+      (call-next-method)))
 (defmethod next ((i iterator))
   (declare (ignore i))
   (error "iterator does not implement NEXT"))
 
 (defgeneric done (iterator)
   (:documentation "Is the traversal completed?"))
+(defmethod done :around ((i iterator))
+  (if (co-modified i)
+      (error "Iterator invalid due to structural modification of collection")
+      (call-next-method)))
 (defmethod done ((i iterator))
   (declare (ignore i))
   (error "iterator does not implement DONE"))
+
+;;;
+;;;    TODO: Put COLLECTION slot on ITERATOR above...
+;;;    
+(defun co-modified (iterator)
+;  (with-slots (collection expected-modification-count) iterator
+;    (/= expected-modification-count (slot-value collection 'modification-count))))
+  (with-slots (list expected-modification-count) iterator
+    (/= expected-modification-count (slot-value list 'modification-count))))
+
