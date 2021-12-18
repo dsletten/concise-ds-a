@@ -80,6 +80,25 @@
         (next i1)
         (next i2))
       nil))
+(defmethod equals ((l1 list) (l2 persistent-list) &key (test #'eql))
+  (equals l2 l1 :test #'(lambda (x y) (funcall test y x))))
+(defmethod equals ((l1 persistent-list) (l2 list) &key (test #'eql))
+  (if (= (size l1) (size l2))
+      (let ((i2 (iterator l2)))
+        (loop for i1 = (iterator l1) then (next i1)
+              do (cond ((done i1) (return (done i2)))
+                       ((done i2) (return nil))
+                       ((funcall test (current i1) (current i2)) (next i2))
+                       (t (return nil)))) )
+      nil))
+(defmethod equals ((l1 persistent-list) (l2 persistent-list) &key (test #'eql))
+  (if (= (size l1) (size l2))
+      (loop for i1 = (iterator l1) then (next i1)
+            for i2 = (iterator l2) then (next i2)
+            do (cond ((done i1) (return (done i2)))
+                     ((done i2) (return nil))
+                     ((not (funcall test (current i1) (current i2))) (return nil))))
+      nil))
 
 (defmethod each ((l list) op)
   (let ((i (iterator l)))
@@ -91,7 +110,7 @@
   (:documentation "Returns a list iterator for the list."))
 (defmethod list-iterator ((l list) &optional start)
   (declare (ignore l start))
-  (error "list does not implement LIST-ITERATOR"))
+  (error "LIST does not implement LIST-ITERATOR"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Structural modification;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -107,7 +126,7 @@
       (error "Type mismatch with OBJS")))
 (defmethod add ((l list) &rest objs)
   (declare (ignore l objs))
-  (error "list does not implement ADD"))
+  (error "LIST does not implement ADD"))
 
 (defun extend-list (list i obj)
   (apply #'add list (loop repeat (1+ (- i (size list)))
@@ -130,7 +149,7 @@
         (t (call-next-method))))
 (defmethod insert ((l list) (i integer) obj)
   (declare (ignore l i obj))
-  (error "list does not implement INSERT"))
+  (error "LIST does not implement INSERT"))
 
 (defgeneric delete (list i)
   (:documentation "Delete the object at the given index."))
@@ -143,7 +162,7 @@
         ((< i (size l)) (call-next-method))))
 (defmethod delete ((l list) (i integer))
   (declare (ignore l i))
-  (error "list does not implement DELETE"))
+  (error "LIST does not implement DELETE"))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;
@@ -161,7 +180,7 @@
         (t (call-next-method))))
 (defmethod nth ((l list) (i integer))
   (declare (ignore l i))
-  (error "list does not implement NTH"))
+  (error "LIST does not implement NTH"))
 
 (defgeneric (setf nth) (obj list i)
   (:documentation "Assign the object at the given index."))
@@ -175,7 +194,7 @@
         (t (call-next-method))))
 (defmethod (setf nth) (obj (l list) (i integer))
   (declare (ignore l i obj))
-  (error "list does not implement (SETF NTH)"))
+  (error "LIST does not implement (SETF NTH)"))
 
 (defgeneric index (list obj &key test)
   (:documentation "Determine index of the object if present in the list."))
@@ -186,7 +205,7 @@
       (error "~A is not of type ~A" obj (type l))))
 (defmethod index ((l list) obj &key test)
   (declare (ignore l obj test))
-  (error "list does not implement INDEX"))
+  (error "LIST does not implement INDEX"))
 
 (defgeneric slice (list i n)
   (:documentation "Return the n-element sublist of the list starting at index i. The index may be negative, however, if the index points beyond the beginning of the list an empty sublist is returned."))
@@ -200,7 +219,7 @@
         (t (call-next-method))))
 (defmethod slice ((l list) (i integer) (n integer))
   (declare (ignore l i n))
-  (error "list does not implement SLICE"))
+  (error "LIST does not implement SLICE"))
 
 ;;;
 ;;;    LINKED-LIST
@@ -224,7 +243,7 @@
         (t (call-next-method))))
 (defmethod insert-before ((l linked-list) node obj)
   (declare (ignore l node obj))
-  (error "linked-list does not implement INSERT"))
+  (error "LINKED-LIST does not implement INSERT"))
 
 (defgeneric insert-after (list node obj)
   (:documentation "Insert the object after the specified node."))
@@ -234,19 +253,19 @@
         (t (call-next-method))))
 (defmethod insert-after ((l linked-list) node obj)
   (declare (ignore l node obj))
-  (error "linked-list does not implement INSERT"))
+  (error "LINKED-LIST does not implement INSERT"))
 
 (defgeneric delete-node (list node)
   (:documentation "Delete the specified node from the list."))
 (defmethod delete-node ((l linked-list) (node cons))
   (declare (ignore l node))
-  (error "linked-list does not implement DELETE-NODE"))
+  (error "LINKED-LIST does not implement DELETE-NODE"))
 
 (defgeneric delete-child (list parent)
   (:documentation "Delete the child of the specified node from the list."))
 (defmethod delete-child ((l linked-list) (parent cons))
   (declare (ignore l parent))
-  (error "linked-list does not implement DELETE-child"))
+  (error "LINKED-LIST does not implement DELETE-child"))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;
@@ -277,7 +296,7 @@
     (setf (fill-pointer store) 0)))
 
 (defmethod iterator ((l array-list))
-  (make-instance 'random-access-list-iterator :list l))
+  (make-instance 'random-access-list-iterator :collection l))
 
 (defmethod list-iterator ((l array-list) &optional (start 0))
   (make-instance 'random-access-list-list-iterator :list l :start start))
@@ -339,18 +358,12 @@
 ;;;
 ;;;    Used by ARRAY-LIST and HASH-TABLE-LIST
 ;;;    
-(defclass random-access-list-iterator (iterator)
-  ((list :initarg :list)
-   (cursor :initform 0 :type integer)))
-
-(defmethod initialize-instance :after ((i random-access-list-iterator) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (list expected-modification-count) i
-    (setf expected-modification-count (slot-value list 'modification-count))))
+(defclass random-access-list-iterator (mutable-collection-iterator)
+  ((cursor :initform 0 :type integer)))
 
 (defmethod current ((i random-access-list-iterator))
-  (with-slots (list cursor) i
-    (nth list cursor)))
+  (with-slots (collection cursor) i
+    (nth collection cursor)))
 
 (defmethod next ((i random-access-list-iterator))
   (with-slots (cursor) i
@@ -361,9 +374,9 @@
                  (current i)))) ))
 
 (defmethod done ((i random-access-list-iterator))
-  (with-slots (list cursor) i
-    (assert (<= cursor (size list)) () "Index is out of bounds: ~D" cursor)
-    (= cursor (size list))))
+  (with-slots (collection cursor) i
+    (assert (<= cursor (size collection)) () "Index is out of bounds: ~D" cursor)
+    (= cursor (size collection))))
 
 ;;;
 ;;;    SINGLY-LINKED-LIST
@@ -389,7 +402,7 @@
           count 0)))
 
 (defmethod iterator ((l singly-linked-list))
-  (make-instance 'singly-linked-list-iterator :list l))
+  (make-instance 'singly-linked-list-iterator :collection l))
 
 (defmethod list-iterator ((l singly-linked-list) &optional (start 0))
   (make-instance 'singly-linked-list-list-iterator :list l :start start))
@@ -519,15 +532,13 @@
 ;;;    Don't need to hold onto LIST after initialization?
 ;;;    CURSOR added to avoid manipulating LIST directly...
 ;;;    
-(defclass singly-linked-list-iterator (iterator)
-  ((list :initarg :list)
-   (cursor)))
+(defclass singly-linked-list-iterator (mutable-collection-iterator)
+  ((cursor)))
 
-(defmethod initialize-instance :after ((i singly-linked-list-iterator) &rest initargs &key list)
+(defmethod initialize-instance :after ((i singly-linked-list-iterator) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (cursor expected-modification-count) i
-    (setf cursor (slot-value list 'store) ; Inappropriate access?
-          expected-modification-count (slot-value list 'modification-count))))
+  (with-slots (cursor collection) i
+    (setf cursor (slot-value collection 'store)))) ; Inappropriate access?
 
 (defmethod current ((i singly-linked-list-iterator))
   (with-slots (cursor) i
@@ -720,7 +731,7 @@
       (reset cursor))))
 
 (defmethod iterator ((l doubly-linked-list-old))
-  (make-instance 'doubly-linked-list-iterator :list l))
+  (make-instance 'doubly-linked-list-iterator :collection l))
 
 ;; (defmethod contains ((l doubly-linked-list-old) obj &key (test #'eql))
 ;;   (loop with iterator = (iterator l)
@@ -999,7 +1010,7 @@
       (incf modification-count))))
 
 (defmethod iterator ((l doubly-linked-list))
-  (make-instance 'doubly-linked-list-iterator :list l))
+  (make-instance 'doubly-linked-list-iterator :collection l))
 
 (defmethod list-iterator ((l doubly-linked-list) &optional (start 0))
   (make-instance 'doubly-linked-list-list-iterator :list l :start start))
@@ -1284,16 +1295,14 @@
         (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))
         dll))))
 
-(defclass doubly-linked-list-iterator (iterator)
-  ((list :initarg :list)
-   (cursor)
+(defclass doubly-linked-list-iterator (mutable-collection-iterator)
+  ((cursor)
    (sealed-for-your-protection :initform t)))
 
-(defmethod initialize-instance :after ((i doubly-linked-list-iterator) &rest initargs &key list)
+(defmethod initialize-instance :after ((i doubly-linked-list-iterator) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (cursor expected-modification-count) i
-    (setf cursor (make-instance 'dcursor :list list)
-          expected-modification-count (slot-value list 'modification-count))))
+  (with-slots (cursor collection) i
+    (setf cursor (make-instance 'dcursor :list collection))))
 
 (defmethod current ((i doubly-linked-list-iterator))
   (with-slots (cursor) i
@@ -1337,7 +1346,7 @@
     (clrhash store)))
 
 (defmethod iterator ((l hash-table-list))
-  (make-instance 'random-access-list-iterator :list l))
+  (make-instance 'random-access-list-iterator :collection l))
 
 (defmethod list-iterator ((l hash-table-list) &optional (start 0))
   (make-instance 'random-access-list-list-iterator :list l :start start))
@@ -1574,12 +1583,12 @@
 ;;;    RESET method?? (CLEAR?)
 ;;;
 (defclass list-iterator ()
-  ((expected-modification-count :type integer))
+  ()
   (:documentation "External iterator for a list. May traverse in either direction."))
 
 (defmethod type ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement TYPE"))
+  (error "LIST-ITERATOR does not implement TYPE"))
 
 ;;; True for single-element list too!!!
 ;; (defmethod emptyp ((i list-iterator))
@@ -1587,45 +1596,43 @@
 ;;            (has-previous i))))
 (defmethod emptyp ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement EMPTYP"))
+  (error "LIST-ITERATOR does not implement EMPTYP"))
 
 ;;
 ;;    Eliminate CURRENT in favor or NEXT/PREVIOUS? (Both move cursor and return elt. Error if at end?)
 ;;    
-
 (defmethod current :around ((i list-iterator))
-  (cond ((emptyp i) (error "List is empty"))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (emptyp i)
+      (error "List is empty")
+      (call-next-method)))
 (defmethod current ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement CURRENT"))
+  (error "LIST-ITERATOR does not implement CURRENT"))
 
 (defgeneric current-index (iterator)
   (:documentation "Returns index of the current element of the iterator traversal."))
 (defmethod current-index :around ((i list-iterator))
-  (cond ((emptyp i) (error "List is empty"))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (emptyp i)
+      (error "List is empty")
+      (call-next-method)))
 (defmethod current-index ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement CURRENT-INDEX"))
+  (error "LIST-ITERATOR does not implement CURRENT-INDEX"))
 
 (defgeneric (setf current) (obj list-iterator)
   (:documentation "Assign the object at the current iterator position."))
 (defmethod (setf current) :around (obj (i list-iterator))
   (cond ((not (typep obj (type i))) (error "~A is not of type ~A" obj (type i)))
         ((emptyp i) (error "List is empty"))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
         (t (call-next-method))))
 (defmethod (setf current) (obj (i list-iterator))
   (declare (ignore i obj))
-  (error "list iterator does not implement (SETF CURRENT)"))
+  (error "LIST-ITERATOR does not implement (SETF CURRENT)"))
 
 (defmethod next :around ((i list-iterator))
-  (cond ((emptyp i) (error "List is empty"))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (emptyp i)
+      (error "List is empty")
+      (call-next-method)))
 (defmethod next ((i list-iterator))
   (declare (ignore i))
   (error "iterator does not implement NEXT"))
@@ -1633,32 +1640,24 @@
 (defgeneric previous (iterator)
   (:documentation "Rewinds iterator to the previous element of the traversal."))
 (defmethod previous :around ((i list-iterator))
-  (cond ((emptyp i) (error "List is empty"))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (emptyp i)
+      (error "List is empty")
+      (call-next-method)))
 (defmethod previous ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement PREVIOUS"))
+  (error "LIST-ITERATOR does not implement PREVIOUS"))
 
 (defgeneric has-next (iterator)
   (:documentation "Is there a next element for the iterator?"))
-(defmethod has-next :around ((i list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of list")
-      (call-next-method)))
 (defmethod has-next ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement HAS-NEXT"))
+  (error "LIST-ITERATOR does not implement HAS-NEXT"))
 
 (defgeneric has-previous (iterator)
   (:documentation "Is there a previous element for the iterator?"))
-(defmethod has-previous :around ((i list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of list")
-      (call-next-method)))
 (defmethod has-previous ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement HAS-PREVIOUS"))
+  (error "LIST-ITERATOR does not implement HAS-PREVIOUS"))
 
 ;;;
 ;;;    "Next" elt becomes current unless at end of list.
@@ -1666,12 +1665,12 @@
 (defgeneric remove (iterator)
   (:documentation "Remove the current element of the iterator from the list."))
 (defmethod remove :around ((i list-iterator))
-  (cond ((emptyp i) (error "List is empty"))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (emptyp i)
+      (error "List is empty")
+      (call-next-method)))
 (defmethod remove ((i list-iterator))
   (declare (ignore i))
-  (error "list iterator does not implement REMOVE"))
+  (error "LIST-ITERATOR does not implement REMOVE"))
 
 ;;; ADD-BEFORE/ADD-AFTER  what about empty list? No CURRENT to establish "before"/"after"
 ;;; Just ADD? Java cursor lies between elts--ADD is more meaningful. For me there would
@@ -1680,22 +1679,119 @@
 (defgeneric add-before (iterator obj)
   (:documentation "Add an element to the list before the current element of the iterator."))
 (defmethod add-before :around ((i list-iterator) obj)
-  (cond ((not (typep obj (type i))) (error "~A is not of type ~A" obj (type i)))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (not (typep obj (type i)))
+      (error "~A is not of type ~A" obj (type i))
+      (call-next-method)))
 (defmethod add-before ((i list-iterator) obj)
   (declare (ignore i obj))
-  (error "list iterator does not implement ADD-BEFORE"))
+  (error "LIST-ITERATOR does not implement ADD-BEFORE"))
 
 (defgeneric add-after (iterator obj)
   (:documentation "Add an element to the list after the current element of the iterator."))
 (defmethod add-after :around ((i list-iterator) obj)
-  (cond ((not (typep obj (type i))) (error "~A is not of type ~A" obj (type i)))
-        ((co-modified i) (error "List iterator invalid due to structural modification of list"))
-        (t (call-next-method))))
+  (if (not (typep obj (type i)))
+      (error "~A is not of type ~A" obj (type i))
+      (call-next-method)))
 (defmethod add-after ((i list-iterator) obj)
   (declare (ignore i obj))
-  (error "list iterator does not implement ADD-AFTER"))
+  (error "LIST-ITERATOR does not implement ADD-AFTER"))
+
+;;;
+;;;    MUTABLE-LIST-LIST-ITERATOR
+;;;    
+(defclass mutable-list-list-iterator (list-iterator)
+  ((list :initarg :list)
+   (expected-modification-count :type integer))
+  (:documentation "External iterator for a mutable list. May traverse in either direction."))
+
+(defmethod initialize-instance :after ((i mutable-list-list-iterator) &rest initargs)
+  (declare (ignore initargs))
+  (with-slots (list expected-modification-count) i
+    (setf expected-modification-count (slot-value list 'modification-count))))
+
+(defmethod current :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod current ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement CURRENT"))
+
+(defmethod current-index :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod current-index ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement CURRENT-INDEX"))
+
+(defmethod (setf current) :around (obj (i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod (setf current) (obj (i mutable-list-list-iterator))
+  (declare (ignore i obj))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement (SETF CURRENT)"))
+
+(defmethod next :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod next ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement NEXT"))
+
+(defmethod previous :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod previous ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement PREVIOUS"))
+
+(defmethod has-next :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of list")
+      (call-next-method)))
+(defmethod has-next ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement HAS-NEXT"))
+
+(defmethod has-previous :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of list")
+      (call-next-method)))
+(defmethod has-previous ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement HAS-PREVIOUS"))
+
+(defmethod remove :around ((i mutable-list-list-iterator))
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod remove ((i mutable-list-list-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement REMOVE"))
+
+(defmethod add-before :around ((i mutable-list-list-iterator) obj)
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod add-before ((i mutable-list-list-iterator) obj)
+  (declare (ignore i obj))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement ADD-BEFORE"))
+
+(defmethod add-after :around ((i mutable-list-list-iterator) obj)
+  (if (co-modified i)
+      (error "List iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod add-after ((i mutable-list-list-iterator) obj)
+  (declare (ignore i obj))
+  (error "MUTABLE-LIST-LIST-ITERATOR does not implement ADD-AFTER"))
+
+(defmethod co-modified ((i mutable-list-list-iterator))
+ (with-slots (list expected-modification-count) i
+   (/= expected-modification-count (slot-value list 'modification-count))))
 
 ;;;
 ;;;    Used by ARRAY-LIST and HASH-TABLE-LIST
@@ -1703,16 +1799,14 @@
 ;;;
 ;;;    RANDOM-ACCESS-LIST-LIST-ITERATOR
 ;;;
-(defclass random-access-list-list-iterator (list-iterator)
-  ((list :initarg :list)
-   (cursor :type integer)))
+(defclass random-access-list-list-iterator (mutable-list-list-iterator)
+  ((cursor :type integer)))
 
 (defmethod initialize-instance :after ((i random-access-list-list-iterator) &rest initargs &key (start 0))
   (declare (ignore initargs))
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
-    (setf cursor start
-          expected-modification-count (slot-value list 'modification-count))))
+    (setf cursor start)))
 
 (defmethod type ((i random-access-list-list-iterator))
   (with-slots (list) i
@@ -1787,9 +1881,8 @@
 ;;;    once the list is populated. It is assumed that the cursor will spring to life at index 0, e.g., calling
 ;;;    REMOVE will remove the 0th element.
 ;;;    
-(defclass singly-linked-list-list-iterator (list-iterator)
-  ((list :initarg :list)
-   (index :type integer :initform 0)
+(defclass singly-linked-list-list-iterator (mutable-list-list-iterator)
+  ((index :type integer :initform 0)
    (cursor :type (or null cons))
    (history :initform (make-instance 'linked-stack))))
 
@@ -1800,10 +1893,9 @@
 ;;;    
 (defmethod initialize-instance :after ((i singly-linked-list-list-iterator) &rest initargs &key (start 0))
   (declare (ignore initargs))
-  (with-slots (list index cursor expected-modification-count) i
+  (with-slots (list index cursor) i
     (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
-    (setf cursor (slot-value list 'store) ; Inappropriate access?
-          expected-modification-count (slot-value list 'modification-count))
+    (setf cursor (slot-value list 'store)) ; Inappropriate access?
     (loop repeat start do (next i)))) ; Build initial history
 
 ;;;
@@ -1905,40 +1997,6 @@
   (with-slots (list cursor) i
     (not (eq cursor (slot-value list 'store)))) )
 
-;; (defmethod remove ((i singly-linked-list-list-iterator))
-;;   (with-slots (list cursor index) i
-;;     (let ((current index))
-;;       (if (has-next i)
-;;           (cl:pop cursor)
-;;           (previous i))
-;;       (delete list current))))
-
-
-;;;    Remove last elt --> Update cursor!
-;; Must invalidate history!
-;; (defmethod remove ((i singly-linked-list-list-iterator))
-;;   (with-slots (list cursor index history) i
-;;     (prog1 (first cursor)
-;;       ;; (if (eq cursor (slot-value list 'store))
-;;       ;;     (delete list 0)
-;;       ;;     (delete list (peek history)))
-;;       (if (emptyp history) ; (not (has-previous i)) ??
-;;           (delete list cursor)
-;; ;          (delete list 0)
-;;           (delete list (peek history) :parent t))
-;;       (unless (emptyp list)
-;;         (cl:pop cursor)
-;;         (when (null cursor)
-;;           (setf cursor (pop history))
-;;           (decf index)))) ))
-;            (setf cursor (rest (peek history)))) ))))
-        
-      ;; (unless (emptyp list)
-      ;;   (rebuild-history i)
-      ;;   (when (and (has-previous i)
-      ;;              (not (has-next i)))
-      ;;     (previous i)))) ))
-
 (defmethod remove :before ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (when (null cursor)
@@ -1985,16 +2043,14 @@
 ;;;
 ;;;    DOUBLY-LINKED-LIST-LIST-ITERATOR
 ;;;    
-(defclass doubly-linked-list-list-iterator (list-iterator)
-  ((list :initarg :list)
-   (cursor :type dcursor)))
+(defclass doubly-linked-list-list-iterator (mutable-list-list-iterator)
+  ((cursor :type dcursor)))
 
 (defmethod initialize-instance :after ((i doubly-linked-list-list-iterator) &rest initargs &key (start 0))
   (declare (ignore initargs))
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
-    (setf cursor (make-instance 'dcursor :list list)
-          expected-modification-count (slot-value list 'modification-count))
+    (setf cursor (make-instance 'dcursor :list list))
     (unless (zerop start)
       (advance cursor start))))
 
@@ -2068,16 +2124,6 @@
 (defmethod has-previous ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (at-start-p cursor))))
-
-;; (defmethod remove ((i doubly-linked-list-list-iterator))
-;;   (with-slots (list cursor) i
-;;     (with-slots (node index) cursor
-;;       (let ((current-index index))
-;;         (cond ((has-next i) (setf node (next node))) ; Half advance...
-;;               ((has-previous i) (rewind cursor)))
-;;         (prog1 (delete list current-index)
-;;           (when (emptyp i)
-;;             (reset cursor)))) ))) ; iterator is dead ... ADD may resuscitate?
 
 (defmethod remove :before ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i

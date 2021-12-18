@@ -59,19 +59,19 @@
   (:documentation "Returns the size of the container."))
 (defmethod size ((c container))
   (declare (ignore c))
-  (error "container does not implement SIZE"))
+  (error "CONTAINER does not implement SIZE"))
 
 (defgeneric emptyp (container)
   (:documentation "Is the container empty?"))
 (defmethod emptyp ((c container))
   (declare (ignore c))
-  (error "container does not implement EMPTYP"))
+  (error "CONTAINER does not implement EMPTYP"))
 
 (defgeneric clear (container)
   (:documentation "Remove all elements from the container"))
 (defmethod clear ((c container))
   (declare (ignore c))
-  (error "container does not implement CLEAR"))
+  (error "CONTAINER does not implement CLEAR"))
 
 ;;;
 ;;;    DISPENSER
@@ -91,7 +91,7 @@
   (:documentation "Returns an iterator for the collection."))
 (defmethod iterator ((c collection))
   (declare (ignore c))
-  (error "collection does not implement ITERATOR"))
+  (error "COLLECTION does not implement ITERATOR"))
 
 (defgeneric contains (collection obj &key test)
   (:documentation "Does the collection contain the given object? Return that object if found."))
@@ -102,19 +102,19 @@
       (error "~A is not of type ~A" obj (type c))))
 (defmethod contains ((c collection) obj &key test)
   (declare (ignore c obj test))
-  (error "collection does not implement CONTAINS"))
+  (error "COLLECTION does not implement CONTAINS"))
 
 (defgeneric equals (collection1 collection2 &key test)
   (:documentation "Are the two collections equal?"))
 (defmethod equals ((c collection) (d collection) &key test)
   (declare (ignore c d test))
-  (error "collection does not implement EQUALS"))
+  (error "COLLECTION does not implement EQUALS"))
 
 (defgeneric each (collection op)
   (:documentation "Apply operation to each element of collection."))
 (defmethod each ((c collection) op)
   (declare (ignore c op))
-  (error "collection does not implement EACH"))
+  (error "COLLECTION does not implement EACH"))
 
 ;;;
 ;;;    ITERATOR
@@ -128,47 +128,72 @@
 ;;;        Kind of gross??
 ;;;
 (defclass iterator ()
-  ((expected-modification-count :type integer))
+  ()
   (:documentation "External iterator for a collection."))
 
 ;;; FIRST, REWIND???
 (defgeneric current (iterator)
   (:documentation "Returns the current element of the iterator traversal."))
 (defmethod current :around ((i iterator))
-  (cond ((done i) (error "Iteration already finished"))
-        ((co-modified i) (error "Iterator invalid due to structural modification of collection"))
-        (t (call-next-method))))
+  (if (done i)
+      (error "Iteration already finished")
+      (call-next-method)))
 (defmethod current ((i iterator))
   (declare (ignore i))
-  (error "iterator does not implement CURRENT"))
+  (error "ITERATOR does not implement CURRENT"))
 
 ;;; Empty???
 (defgeneric next (iterator)
   (:documentation "Advances iterator to the next element of the traversal. Returns that element or NIL if at end."))
-(defmethod next :around ((i iterator))
-  (if (co-modified i)
-      (error "Iterator invalid due to structural modification of collection")
-      (call-next-method)))
 (defmethod next ((i iterator))
   (declare (ignore i))
-  (error "iterator does not implement NEXT"))
+  (error "ITERATOR does not implement NEXT"))
 
 (defgeneric done (iterator)
   (:documentation "Is the traversal completed?"))
-(defmethod done :around ((i iterator))
+(defmethod done ((i iterator))
+  (declare (ignore i))
+  (error "ITERATOR does not implement DONE"))
+
+;;;
+;;;    MUTABLE-COLLECTION-ITERATOR
+;;;    
+(defclass mutable-collection-iterator (iterator)
+  ((collection :initarg :collection)
+   (expected-modification-count :type integer))
+  (:documentation "External iterator for a mutable collection."))
+
+(defmethod initialize-instance :after ((i mutable-collection-iterator) &rest initargs)
+  (declare (ignore initargs))
+  (with-slots (collection expected-modification-count) i
+    (setf expected-modification-count (slot-value collection 'modification-count))))
+
+(defmethod current :around ((i mutable-collection-iterator))
   (if (co-modified i)
       (error "Iterator invalid due to structural modification of collection")
       (call-next-method)))
-(defmethod done ((i iterator))
+(defmethod current ((i mutable-collection-iterator))
   (declare (ignore i))
-  (error "iterator does not implement DONE"))
+  (error "MUTABLE-COLLECTION-ITERATOR does not implement CURRENT"))
 
-;;;
-;;;    TODO: Put COLLECTION slot on ITERATOR above...
-;;;    
-(defun co-modified (iterator)
-;  (with-slots (collection expected-modification-count) iterator
-;    (/= expected-modification-count (slot-value collection 'modification-count))))
-  (with-slots (list expected-modification-count) iterator
-    (/= expected-modification-count (slot-value list 'modification-count))))
+(defmethod next :around ((i mutable-collection-iterator))
+  (if (co-modified i)
+      (error "Iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod next ((i mutable-collection-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-COLLECTION-ITERATOR does not implement NEXT"))
 
+(defmethod done :around ((i mutable-collection-iterator))
+  (if (co-modified i)
+      (error "Iterator invalid due to structural modification of collection")
+      (call-next-method)))
+(defmethod done ((i mutable-collection-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-COLLECTION-ITERATOR does not implement DONE"))
+
+(defgeneric co-modified (iterator)
+  (:documentation "Check whether structure of underlying collection has been changed."))
+(defmethod co-modified ((i mutable-collection-iterator))
+ (with-slots (collection expected-modification-count) i
+   (/= expected-modification-count (slot-value collection 'modification-count))))

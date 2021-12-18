@@ -42,7 +42,7 @@
       (error "~A is not of type ~A" obj (type s))))
 (defmethod push ((s stack) obj)
   (declare (ignore s obj))
-  (error "stack does not implement PUSH"))
+  (error "STACK does not implement PUSH"))
 
 ;;;
 ;;;    POP should ensure that the reference to the object just removed from the stack has been released
@@ -56,7 +56,7 @@
       (call-next-method)))
 (defmethod pop ((s stack))
   (declare (ignore s))
-  (error "stack does not implement POP"))
+  (error "STACK does not implement POP"))
 
 (defgeneric peek (stack)
   (:documentation "Examine object on the top of the stack"))
@@ -66,7 +66,7 @@
       (call-next-method)))
 (defmethod peek ((s stack))
   (declare (ignore s))
-  (error "stack does not implement PEEK"))
+  (error "STACK does not implement PEEK"))
 
 ;;;
 ;;;    ARRAY-STACK

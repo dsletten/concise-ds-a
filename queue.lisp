@@ -50,7 +50,7 @@
       (error "~A is not of type ~A" obj (type q))))
 (defmethod enqueue ((q queue) obj)
   (declare (ignore q obj))
-  (error "queue does not implement ENQUEUE"))
+  (error "QUEUE does not implement ENQUEUE"))
 
 ;;;
 ;;;    DEQUEUE should ensure that reference to object being removed from queue is actually removed in order to
@@ -64,7 +64,7 @@
       (call-next-method)))
 (defmethod dequeue ((q queue))
   (declare (ignore q))
-  (error "queue does not implement DEQUEUE"))
+  (error "QUEUE does not implement DEQUEUE"))
 
 (defgeneric front (queue)
   (:documentation "Examine object at the front of the queue"))
@@ -74,7 +74,7 @@
       (call-next-method)))
 (defmethod front ((q queue))
   (declare (ignore q))
-  (error "queue does not implement FRONT"))
+  (error "QUEUE does not implement FRONT"))
 
 ;;;
 ;;;    ARRAY-QUEUE - Uses "circular" array. As long as there is room, queue can
@@ -442,7 +442,7 @@
       (error "~A is not of type ~A" obj (type dq))))
 (defmethod enqueue* ((dq deque) obj)
   (declare (ignore dq obj))
-  (error "deque does not implement ENQUEUE*"))
+  (error "DEQUE does not implement ENQUEUE*"))
 
 (defgeneric dequeue* (deque)
   (:documentation "Remove an object from the rear of the deque"))
@@ -452,7 +452,7 @@
       (call-next-method)))
 (defmethod dequeue* ((dq deque))
   (declare (ignore dq))
-  (error "deque does not implement DEQUEUE*"))
+  (error "DEQUE does not implement DEQUEUE*"))
 
 (defgeneric rear (deque)
   (:documentation "Examine object at the rear of the deque"))
@@ -462,7 +462,7 @@
       (call-next-method)))
 (defmethod rear ((dq deque))
   (declare (ignore dq))
-  (error "deque does not implement REAR"))
+  (error "DEQUE does not implement REAR"))
 
 ;;;
 ;;;    Doubly-linked-list deque
