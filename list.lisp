@@ -80,25 +80,25 @@
         (next i1)
         (next i2))
       nil))
-(defmethod equals ((l1 list) (l2 persistent-list) &key (test #'eql))
-  (equals l2 l1 :test #'(lambda (x y) (funcall test y x))))
-(defmethod equals ((l1 persistent-list) (l2 list) &key (test #'eql))
-  (if (= (size l1) (size l2))
-      (let ((i2 (iterator l2)))
-        (loop for i1 = (iterator l1) then (next i1)
-              do (cond ((done i1) (return (done i2)))
-                       ((done i2) (return nil))
-                       ((funcall test (current i1) (current i2)) (next i2))
-                       (t (return nil)))) )
-      nil))
-(defmethod equals ((l1 persistent-list) (l2 persistent-list) &key (test #'eql))
-  (if (= (size l1) (size l2))
-      (loop for i1 = (iterator l1) then (next i1)
-            for i2 = (iterator l2) then (next i2)
-            do (cond ((done i1) (return (done i2)))
-                     ((done i2) (return nil))
-                     ((not (funcall test (current i1) (current i2))) (return nil))))
-      nil))
+;; (defmethod equals ((l1 list) (l2 persistent-list) &key (test #'eql))
+;;   (equals l2 l1 :test #'(lambda (x y) (funcall test y x))))
+;; (defmethod equals ((l1 persistent-list) (l2 list) &key (test #'eql))
+;;   (if (= (size l1) (size l2))
+;;       (let ((i2 (iterator l2)))
+;;         (loop for i1 = (iterator l1) then (next i1)
+;;               do (cond ((done i1) (return (done i2)))
+;;                        ((done i2) (return nil))
+;;                        ((funcall test (current i1) (current i2)) (next i2))
+;;                        (t (return nil)))) )
+;;       nil))
+;; (defmethod equals ((l1 persistent-list) (l2 persistent-list) &key (test #'eql))
+;;   (if (= (size l1) (size l2))
+;;       (loop for i1 = (iterator l1) then (next i1)
+;;             for i2 = (iterator l2) then (next i2)
+;;             do (cond ((done i1) (return (done i2)))
+;;                      ((done i2) (return nil))
+;;                      ((not (funcall test (current i1) (current i2))) (return nil))))
+;;       nil))
 
 (defmethod each ((l list) op)
   (let ((i (iterator l)))
@@ -222,6 +222,28 @@
   (error "LIST does not implement SLICE"))
 
 ;;;
+;;;    MUTABLE-LIST
+;;;
+(defclass mutable-list (mutable-collection list)
+  ()
+  (:documentation "A list whose structure and elements can be modified."))
+
+(defmethod clear :after ((l mutable-list))
+  (count-modification l))           
+
+(defmethod add :after ((l mutable-list) &rest objs)
+  (declare (ignore objs))
+  (count-modification l))
+
+(defmethod insert :after ((l mutable-list) (i integer) obj)
+  (declare (ignore i obj))
+  (count-modification l))
+
+(defmethod delete :after ((l mutable-list) (i integer))
+  (declare (ignore i))
+  (count-modification l))
+
+;;;
 ;;;    LINKED-LIST
 ;;;
 ;;;    These methods are dangerous? We can't verify that the given NODE is actually
@@ -255,25 +277,47 @@
   (declare (ignore l node obj))
   (error "LINKED-LIST does not implement INSERT"))
 
-(defgeneric delete-node (list node)
+(defgeneric delete-node (list doomed)
   (:documentation "Delete the specified node from the list."))
-(defmethod delete-node ((l linked-list) (node cons))
-  (declare (ignore l node))
+(defmethod delete-node ((l linked-list) doomed)
+  (declare (ignore l doomed))
   (error "LINKED-LIST does not implement DELETE-NODE"))
 
 (defgeneric delete-child (list parent)
   (:documentation "Delete the child of the specified node from the list."))
-(defmethod delete-child ((l linked-list) (parent cons))
+(defmethod delete-child ((l linked-list) parent)
   (declare (ignore l parent))
   (error "LINKED-LIST does not implement DELETE-child"))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;
+;;;    MUTABLE-LINKED-LIST
+;;;
+(defclass mutable-linked-list (mutable-list linked-list)
+  ()
+  (:documentation "A list implemented with linked nodes whose structure and elements can be modified."))
+
+(defmethod insert-before :after ((l mutable-linked-list) node obj)
+  (declare (ignore node obj))
+  (count-modification l))
+
+(defmethod insert-after :after ((l mutable-linked-list) node obj)
+  (declare (ignore node obj))
+  (count-modification l))
+
+(defmethod delete-node :after ((l mutable-linked-list) doomed)
+  (declare (ignore doomed))
+  (count-modification l))
+
+(defmethod delete-child :after ((l mutable-linked-list) parent)
+  (declare (ignore parent))
+  (count-modification l))
+
+;;;
 ;;;    ARRAY-LIST
 ;;;    
-(defclass array-list (list)
-  ((store)
-   (modification-count :initform 0)))
+(defclass array-list (mutable-list)
+  ((store)))
 
 (defmethod initialize-instance :after ((l array-list) &rest initargs)
   (declare (ignore initargs))
@@ -291,9 +335,7 @@
   (zerop (size l)))
 
 (defmethod clear ((l array-list))
-  (with-slots (store modification-count) l
-    (incf modification-count)
-    (setf (fill-pointer store) 0)))
+  (setf (fill-pointer store) 0))
 
 (defmethod iterator ((l array-list))
   (make-instance 'random-access-list-iterator :collection l))
@@ -307,8 +349,7 @@
 
 (defmethod add ((l array-list) &rest objs)
   (unless (null objs)
-    (with-slots (store modification-count) l
-      (incf modification-count) ; Only 1?
+    (with-slots (store) l
       (dolist (obj objs) ; Allocate new array?
         (vector-push-extend obj store)))) )
 
@@ -318,15 +359,13 @@
 ;;;    Can't do this with negative index
 ;;;    
 (defmethod insert ((l array-list) (i integer) obj)
-  (with-slots (store modification-count) l
-    (incf modification-count)
+  (with-slots (store) l
     (vector-push-extend (fill-elt l) store)
     (setf (subseq store (1+ i)) (subseq store i)
           (aref store i) obj)))
 
 (defmethod delete ((l array-list) (i integer))
-  (with-slots (store modification-count) l
-    (incf modification-count)
+  (with-slots (store) l
     (prog1 (aref store i)
       (setf (subseq store i) (subseq store (1+ i)))
       (vector-pop store))))
@@ -381,10 +420,9 @@
 ;;;
 ;;;    SINGLY-LINKED-LIST
 ;;;    
-(defclass singly-linked-list (linked-list)
+(defclass singly-linked-list (mutable-linked-list)
   ((store :initform '())
-   (count :initform 0)
-   (modification-count :initform 0)))
+   (count :initform 0)))
 
 (defun make-linked-list (&key (type t) (fill-elt nil))
   (make-instance 'singly-linked-list :type type :fill-elt fill-elt))
@@ -396,8 +434,7 @@
   (null (slot-value l 'store)))
 
 (defmethod clear ((l singly-linked-list))
-  (with-slots (store count modification-count) l
-    (incf modification-count)
+  (with-slots (store count) l
     (setf store '()
           count 0)))
 
@@ -425,8 +462,7 @@
 ;;;    
 (defmethod add ((l singly-linked-list) &rest objs)
   (unless (null objs)
-    (with-slots (store count modification-count) l
-      (incf modification-count) ; Only 1?
+    (with-slots (store count) l
       (loop for i from 0
             for elt in objs
             collect elt into elts
@@ -435,7 +471,11 @@
 
 (defmethod insert ((l singly-linked-list) (i integer) obj)
   (with-slots (store) l
-    (insert-before l (nthcdr i store) obj)))
+    (insert-cons-before (nthcdr i store) obj)))
+(defmethod insert :after ((l singly-linked-list) (i integer) obj)
+  (declare (ignore i obj))
+  (with-slots (count) l
+    (incf count)))
 
 ;;;
 ;;;    Make copy of current node. Update current node to
@@ -446,29 +486,34 @@
 ;;;    - If not, MODIFICATION-COUNT, COUNT are modified inappropriately.
 ;;;    
 (defmethod insert-before ((l singly-linked-list) node obj)
+  (insert-cons-before node obj))
+(defmethod insert-before :after ((l singly-linked-list) node obj)
+  (declare (ignore node obj))
+  (with-slots (count) l
+    (incf count)))
+
+(defun insert-cons-before (node obj)
   (let ((copy (cons (first node) (rest node))))
     (setf (first node) obj
           (rest node) copy)))
-(defmethod insert-before :after ((l singly-linked-list) node obj)
-  (declare (ignore node obj))
-  (with-slots (count modification-count) l
-    (incf modification-count)
-    (incf count)))
 
 (defmethod insert-after ((l singly-linked-list) node obj)
   (let ((tail (cons obj (rest node))))
     (setf (rest node) tail)))
 (defmethod insert-after :after ((l singly-linked-list) node obj)
   (declare (ignore node obj))
-  (with-slots (count modification-count) l
-    (incf modification-count)
+  (with-slots (count) l
     (incf count)))
 
 (defmethod delete ((l singly-linked-list) (i integer))
   (with-slots (store count) l
     (if (zerop i)
-        (delete-node l store)
-        (delete-child l (nthcdr (1- i) store)))) )
+        (delete-cons-node l store)
+        (delete-cons-child (nthcdr (1- i) store)))) )
+(defmethod delete :after ((l singly-linked-list) (i integer))
+  (declare (ignore i))
+  (with-slots (count) l
+    (decf count)))
 
 ;;;    Doesn't need :AROUND method? REMOVE has :AROUND method...
 ;;;    No way to confirm that NODE is actually part of list? Doesn't matter here? See DLL
@@ -478,6 +523,13 @@
 ;;;    - NODE is target. Copy child and route around it.
 ;;;    (Child is actually removed.)
 (defmethod delete-node ((l singly-linked-list) (doomed cons))
+  (delete-cons-node l doomed))
+(defmethod delete-node :after ((l singly-linked-list) (doomed cons))
+  (declare (ignore doomed))
+  (with-slots (count) l
+    (decf count)))
+
+(defun delete-cons-node (l doomed)
   (with-slots (store) l
     (let ((content (first doomed))
           (saved (rest doomed)))
@@ -488,27 +540,23 @@
                (error "Current node must have non-nil next node"))
               (t (setf (first doomed) (first saved)
                        (rest doomed) (rest saved)))) ))))
-(defmethod delete-node :after ((l singly-linked-list) (doomed cons))
-  (declare (ignore doomed))
-  (with-slots (count modification-count) l
-    (incf modification-count)
-    (decf count)))
 
 ;;;    DELETE-CHILD cannot delete 1st node in list!
 ;;;    - Route around child.
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list) (parent cons))
-  (with-slots (store) l
-    (let ((child (rest parent)))
-      (if (null child)
-          (error "Parent must have child node")
-          (prog1 (first child)
-            (setf (rest parent) (rest child)))) )))
+  (delete-cons-child parent))
 (defmethod delete-child :after ((l singly-linked-list) (node cons))
   (declare (ignore node))
-  (with-slots (count modification-count) l
-    (incf modification-count)
+  (with-slots (count) l
     (decf count)))
+
+(defun delete-cons-child (parent)
+  (let ((child (rest parent)))
+    (if (null child)
+        (error "Parent must have child node")
+        (prog1 (first child)
+          (setf (rest parent) (rest child)))) ))
 
 (defmethod nth ((l singly-linked-list) (i integer))
   (with-slots (store count) l
@@ -976,10 +1024,9 @@
 ;;;    Take two. Only one cursor.
 ;;;    - Can't make doubly-linked tree? CONTENT of DCONS is singly-linked.
 ;;;    
-(defclass doubly-linked-list (linked-list)
+(defclass doubly-linked-list (mutable-linked-list)
   ((store :initform nil)
    (count :initform 0)
-   (modification-count :initform 0)
    (cursor :documentation "Floating cursor. May simplify access based on previous access."))
   (:documentation "Circular doubly-linked list."))
 
@@ -999,15 +1046,14 @@
 
 (defmethod clear ((l doubly-linked-list))
   (unless (emptyp l)
-    (with-slots (store count cursor modification-count) l
+    (with-slots (store count cursor) l
       (loop repeat count
             for dcons = store then (next dcons)
             do (setf (previous dcons) nil))
       (setf (next store) nil
             store nil
             count 0)
-      (reset cursor)
-      (incf modification-count))))
+      (reset cursor))))
 
 (defmethod iterator ((l doubly-linked-list))
   (make-instance 'doubly-linked-list-iterator :collection l))
@@ -1083,9 +1129,8 @@
 
 (defmethod add ((l doubly-linked-list) &rest objs)
   (unless (null objs)
-    (with-slots (store count modification-count) l
+    (with-slots (store count) l
       (labels ((add-nodes (head start elts)
-                 (incf modification-count) ; Only 1?
                  (loop for dcons = start then (next dcons)
                        for i from 1
                        for elt in elts
@@ -1097,7 +1142,6 @@
                 (t (let ((tail (previous store)))
                      (dlink tail dcons))))
           (add-nodes store dcons (rest objs)))) )))
-
 (defmethod add :after ((l doubly-linked-list) &rest objs)
   (declare (ignore objs))
   (with-slots (cursor) l
@@ -1117,30 +1161,30 @@
 ;    (assert (typep i `(integer 0 (,count))) () "Invalid index: ~D" i)
     (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
     (cond ((emptyp list) (error "List is empty"))
-          (t (with-slots ((c index) node) cursor
-               (declare (integer c))
+          (t (with-slots (index node) cursor
+               (declare (integer index))
                (cond ((zerop i) store)
-                     ((= i c) node)
-                     ((< i (/ c 2))
+                     ((= i index) node)
+                     ((< i (/ index 2))
                       (reset cursor)
                       (advance cursor i)
                       node)
-                     ((< i c)
-                      (rewind cursor (- c i))
+                     ((< i index)
+                      (rewind cursor (- index i))
                       node)
-                     ((<= i (/ (+ count c) 2))
-                      (advance cursor (- i c))
+                     ((<= i (/ (+ count index) 2))
+                      (advance cursor (- i index))
                       node)
                      (t (reset cursor)
                         (rewind cursor (- count i))
                         node)))) )))
 
 (defmethod insert ((l doubly-linked-list) (i integer) obj)
-  (insert-before l (nth-dcons l i) obj))
+  (insert-dcons-before l (nth-dcons l i) obj))
 (defmethod insert :after ((l doubly-linked-list) (i integer) obj)
   (declare (ignore obj))
   (with-slots (count cursor) l
-;    (incf count)
+    (incf count)
     (with-slots (index) cursor
       (when (or (not (initializedp cursor))
                 (<= 0 i index)
@@ -1152,52 +1196,38 @@
 ;;;    - If not, MODIFICATION-COUNT, COUNT, CURSOR are modified inappropriately.
 ;;;    
 (defmethod insert-before ((l doubly-linked-list) node obj)
+  (insert-dcons-before l node obj))
+(defmethod insert-before :after ((l doubly-linked-list) node obj)
+  (declare (ignore node obj))
+  (with-slots (count cursor) l
+    (incf count)
+    (with-slots (index) cursor
+      (incf index))))
+
+(defun insert-dcons-before (l node obj)
   (with-slots (store) l
     (let ((new-dcons (make-instance 'dcons :content obj)))
       (dlink (previous node) new-dcons)
       (dlink new-dcons node)
       (when (eq store node)
         (setf store new-dcons)))) )
-(defmethod insert-before :after ((l doubly-linked-list) node obj)
-  (declare (ignore node obj))
-  (with-slots (count cursor modification-count) l
-    (incf modification-count)
-    (incf count)
-    (with-slots (index) cursor
-      (incf index))))
-
+  
 (defmethod insert-after ((l doubly-linked-list) node obj)
   (let ((new-dcons (make-instance 'dcons :content obj)))
     (dlink new-dcons (next node)) ; Do this in the right order!!
     (dlink node new-dcons)))
 (defmethod insert-after :after ((l doubly-linked-list) node obj)
   (declare (ignore node obj))
-  (with-slots (count modification-count) l
-    (incf modification-count)
+  (with-slots (count) l
     (incf count)))
 
-;; (defmethod delete ((l doubly-linked-list) (i integer))
-;;   (with-slots (store) l
-;;     (if (zerop i)
-;;         (prog1 (content store)
-;;           (if (eq store (next store))
-;;               (setf store '())
-;;               (let ((new-store (next store)))
-;;                 (dlink (previous store) new-store)
-;;                 (setf store new-store))))
-;;         (let ((doomed (nth-dcons l i)))
-;;           (prog1 (content doomed)
-;;             (dlink (previous doomed) (next doomed)))) )))
-
-;; (defmethod delete :after ((l doubly-linked-list) (i integer))
-;;   (declare (ignore i))
-;;   (with-slots (count cursor) l
-;;     (decf count)
-;;     (reset cursor))) ; NTH-DCONS moves cursor in most cases?
-
 (defmethod delete ((l doubly-linked-list) (i integer))
-  (delete-node l (nth-dcons l i)))
-
+  (delete-dcons-node l (nth-dcons l i)))
+(defmethod delete :after ((l doubly-linked-list) (i integer))
+  (declare (ignore i))
+  (with-slots (count cursor) l
+    (decf count)
+    (reset cursor)))
 ;;;
 ;;;    Confirm that DOOMED is actually a node in this list!
 ;;;    - Smuggling in some fabricated DCONS could snip out multiple nodes depending
@@ -1205,30 +1235,16 @@
 ;;;      
 ;;;    This method needs to be absolutely private! Risky to split an object up like this...
 ;;;    
-;; (defmethod delete ((l doubly-linked-list) (doomed dcons) &key &allow-other-keys)
-;;   (with-slots (store) l
-;;     (assert (and (eq doomed (next (previous doomed))) ; This still doesn't prove that DOOMED is in L! But it can't damage L if it doesn't belong... Only decrements L's COUNT.
-;;                  (eq doomed (previous (next doomed))))
-;;             ()
-;;             "This node ~D does not belong here!"
-;;             doomed)
-;;     (prog1 (content doomed)
-;;       (cond ((and (eq doomed store) (eq store (next store))) ; First test confirms that DOOMED is part of L. Otherwise possible to remove last remaining node of L with junk DOOMED node.
-;;              (setf store '()))
-;; ;            ((eq store (next store)) (error "Whaa?"))
-;;             (t (dlink (previous doomed) (next doomed))
-;;                (when (eq doomed store)
-;;                  (setf store (next store)))) ))))
-
-;; ;(defmethod delete :after ((l doubly-linked-list) (i integer))
-;; (defmethod delete :after ((l doubly-linked-list) (doomed dcons) &key &allow-other-keys)
-;;   (declare (ignore doomed))
-;;   (with-slots (count cursor modification-count) l
-;;     (incf modification-count)
-;;     (decf count)
-;;     (reset cursor))) ; NTH-DCONS moves cursor in most cases?
 
 (defmethod delete-node ((l doubly-linked-list) (doomed dcons))
+  (delete-dcons-node l doomed))
+(defmethod delete-node :after ((l doubly-linked-list) (doomed dcons))
+  (declare (ignore doomed))
+  (with-slots (count cursor) l
+    (decf count)
+    (reset cursor))) ; NTH-DCONS moves cursor in most cases?
+
+(defun delete-dcons-node (l doomed)
   (with-slots (store) l
     (let ((content (content doomed))
           (saved (next doomed)))
@@ -1239,13 +1255,7 @@
              (setf (content doomed) (content saved))
              (dlink doomed (next saved)))
             (t (dlink (previous doomed) saved)))) ))) ; Other than first elt
-(defmethod delete-node :after ((l doubly-linked-list) (doomed dcons))
-  (declare (ignore doomed))
-  (with-slots (count cursor modification-count) l
-    (incf modification-count)
-    (decf count)
-    (reset cursor))) ; NTH-DCONS moves cursor in most cases?
-
+  
 ;;;
 ;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST.
 ;;;    
@@ -1258,8 +1268,7 @@
             (dlink parent (next child)))) )))
 (defmethod delete-child :after ((l doubly-linked-list) (doomed dcons))
   (declare (ignore doomed))
-  (with-slots (count cursor modification-count) l
-    (incf modification-count)
+  (with-slots (count cursor) l
     (decf count)
     (reset cursor))) ; NTH-DCONS moves cursor in most cases?
 
@@ -1329,9 +1338,8 @@
 ;;;    the deli counter model falls apart. An insertion or deletion could require that the mapping
 ;;;    of keys to elements be recomputed--similar to shifting elements in an array.
 ;;;
-(defclass hash-table-list (list)
-  ((store :initform (make-hash-table))
-   (modification-count :initform 0)))
+(defclass hash-table-list (mutable-list)
+  ((store :initform (make-hash-table))))
 
 (defmethod size ((l hash-table-list))
   (with-slots (store) l
@@ -1341,8 +1349,7 @@
   (zerop (size l)))
 
 (defmethod clear ((l hash-table-list))
-  (with-slots (store modification-count) l
-    (incf modification-count)
+  (with-slots (store) l
     (clrhash store)))
 
 (defmethod iterator ((l hash-table-list))
@@ -1359,22 +1366,19 @@
 
 (defmethod add ((l hash-table-list) &rest objs)
   (unless (null objs)
-    (with-slots (store modification-count) l
-      (incf modification-count) ; Only 1?
+    (with-slots (store) l
       (loop for i from (size l)
             for obj in objs
             do (setf (gethash i store) obj)))) )
 
 (defmethod insert ((l hash-table-list) (i integer) obj)
-  (with-slots (store modification-count) l
-    (incf modification-count)
+  (with-slots (store) l
     (loop for j from (size l) above i
           do (setf (gethash j store) (gethash (1- j) store)))
     (setf (gethash i store) obj)))
                    
 (defmethod delete ((l hash-table-list) (i integer))
-  (with-slots (store modification-count) l
-    (incf modification-count)
+  (with-slots (store) l
     (let ((count (size l)))
       (prog1 (gethash i store)
         (loop for j from i below (1- count)
@@ -1405,7 +1409,7 @@
 ;;;
 ;;;    PERSISTENT-LIST
 ;;; 
-(defclass persistent-list (list)
+(defclass persistent-list (list) ; LINKED-LIST???
   ((store :initform '() :initarg :store)
    (count :initform 0 :initarg :count))) ; Should we trust this??
 
@@ -1422,6 +1426,31 @@
 
 (defun make-persistent-list (&key (type t) (fill-elt nil))
   (make-instance 'persistent-list :type type :fill-elt fill-elt))
+
+(defmethod equals ((l1 list) (l2 persistent-list) &key (test #'eql))
+  (equals l2 l1 :test #'(lambda (x y) (funcall test y x))))
+(defmethod equals ((l1 persistent-list) (l2 list) &key (test #'eql))
+  (if (= (size l1) (size l2))
+      (let ((i2 (iterator l2)))
+        (loop for i1 = (iterator l1) then (next i1)
+              do (cond ((done i1) (return (done i2)))
+                       ((done i2) (return nil))
+                       ((funcall test (current i1) (current i2)) (next i2))
+                       (t (return nil)))) )
+      nil))
+(defmethod equals ((l1 persistent-list) (l2 persistent-list) &key (test #'eql))
+  (if (= (size l1) (size l2))
+      (loop for i1 = (iterator l1) then (next i1)
+            for i2 = (iterator l2) then (next i2)
+            do (cond ((done i1) (return (done i2)))
+                     ((done i2) (return nil))
+                     ((not (funcall test (current i1) (current i2))) (return nil))))
+      nil))
+
+(defmethod each ((l persistent-list) op)
+  (loop for i = (iterator l) then (next i)
+        until (done i)
+        do (funcall op (current i))))
 
 (defmethod size ((l persistent-list))
   (slot-value l 'count))
@@ -1526,7 +1555,7 @@
 ;;;    Identical to SINGLY-LINKED-LIST-ITERATOR?!
 ;;;    Iterator should be persistent too?!? <-----------------------------------------------------------------------------
 ;;;    
-(defclass persistent-list-iterator (iterator) ; EXPECTED-MODIFICATION-COUNT inherited?!?
+(defclass persistent-list-iterator (iterator)
   ((cursor)))
 
 (defmethod initialize-instance :after ((i persistent-list-iterator) &rest initargs &key (list nil listp) (store nil storep))
@@ -1709,6 +1738,14 @@
   (with-slots (list expected-modification-count) i
     (setf expected-modification-count (slot-value list 'modification-count))))
 
+(defmethod count-modification ((i mutable-list-list-iterator))
+  (with-slots (expected-modification-count) i
+    (incf expected-modification-count)))
+
+(defmethod co-modified ((i mutable-list-list-iterator))
+ (with-slots (list expected-modification-count) i
+   (/= expected-modification-count (slot-value list 'modification-count))))
+
 (defmethod current :around ((i mutable-list-list-iterator))
   (if (co-modified i)
       (error "List iterator invalid due to structural modification of collection")
@@ -1772,6 +1809,8 @@
 (defmethod remove ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement REMOVE"))
+(defmethod remove :after ((i mutable-list-list-iterator))
+  (count-modification i))
 
 (defmethod add-before :around ((i mutable-list-list-iterator) obj)
   (if (co-modified i)
@@ -1780,6 +1819,9 @@
 (defmethod add-before ((i mutable-list-list-iterator) obj)
   (declare (ignore i obj))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement ADD-BEFORE"))
+(defmethod add-before :after ((i mutable-list-list-iterator) obj)
+  (declare (ignore obj))
+  (count-modification i))
 
 (defmethod add-after :around ((i mutable-list-list-iterator) obj)
   (if (co-modified i)
@@ -1788,10 +1830,9 @@
 (defmethod add-after ((i mutable-list-list-iterator) obj)
   (declare (ignore i obj))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement ADD-AFTER"))
-
-(defmethod co-modified ((i mutable-list-list-iterator))
- (with-slots (list expected-modification-count) i
-   (/= expected-modification-count (slot-value list 'modification-count))))
+(defmethod add-after :after ((i mutable-list-list-iterator) obj)
+  (declare (ignore obj))
+  (count-modification i))
 
 ;;;
 ;;;    Used by ARRAY-LIST and HASH-TABLE-LIST
@@ -1850,26 +1891,23 @@
     (> cursor 0)))
 
 (defmethod remove ((i random-access-list-list-iterator))
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (let ((index cursor))
       (when (and (has-previous i)
                  (not (has-next i)))
         (decf cursor))
-      (prog1 (delete list index)
-        (incf expected-modification-count)))) )
+      (delete list index))))
 
 (defmethod add-before ((i random-access-list-list-iterator) obj)
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (cond ((emptyp i) (add list obj))
           (t (insert list cursor obj)
-             (incf cursor)))
-    (incf expected-modification-count)))
+             (incf cursor)))) )
 
 (defmethod add-after ((i random-access-list-list-iterator) obj)
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (cond ((emptyp i) (add list obj))
-          (t (insert list (1+ cursor) obj)))
-    (incf expected-modification-count)))
+          (t (insert list (1+ cursor) obj)))) )
 
 ;;;
 ;;;    SINGLY-LINKED-LIST-LIST-ITERATOR
@@ -1895,7 +1933,7 @@
   (declare (ignore initargs))
   (with-slots (list index cursor) i
     (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
-    (setf cursor (slot-value list 'store)) ; Inappropriate access?
+    (initialize-cursor i)
     (loop repeat start do (next i)))) ; Build initial history
 
 ;;;
@@ -2005,18 +2043,15 @@
   (with-slots (list cursor index history) i
     (cond ((zerop index)
            (prog1 (delete-node list cursor)
-             (setf cursor (slot-value list 'store))))
+             (initialize-cursor i)))
           (t (let ((parent (peek history)))
                (cond ((has-next i) (setf cursor (rest cursor)))
                      (t (setf cursor (pop history))
                         (decf index)))
                (delete-child list parent)))) ))
-(defmethod remove :after ((i singly-linked-list-list-iterator))
-  (with-slots (expected-modification-count) i
-    (incf expected-modification-count)))
 
 (defmethod add-before ((i singly-linked-list-list-iterator) obj)
-  (with-slots (list cursor index history expected-modification-count) i
+  (with-slots (list cursor index history) i
     (cond ((emptyp i)
            (add list obj)
            (initialize-cursor i))
@@ -2024,10 +2059,6 @@
              (push history cursor)
              (cl:pop cursor)
              (incf index)))) )
-(defmethod add-before :after ((i singly-linked-list-list-iterator) obj)
-  (declare (ignore obj))
-  (with-slots (expected-modification-count) i
-    (incf expected-modification-count)))
 
 (defmethod add-after ((i singly-linked-list-list-iterator) obj)
   (with-slots (list cursor index) i
@@ -2035,10 +2066,6 @@
            (add list obj)
            (initialize-cursor i))
           (t (insert-after list cursor obj)))) )
-(defmethod add-after :after ((i singly-linked-list-list-iterator) obj)
-  (declare (ignore obj))
-  (with-slots (expected-modification-count) i
-    (incf expected-modification-count)))
 
 ;;;
 ;;;    DOUBLY-LINKED-LIST-LIST-ITERATOR
@@ -2139,26 +2166,20 @@
                  (cond ((has-next i) (setf node (next node))) ; Half advance...
                        (t (rewind cursor)))
                  (delete-node list current-node)))) )))
-(defmethod remove :after ((i doubly-linked-list-list-iterator))
-  (with-slots (expected-modification-count) i
-    (incf expected-modification-count)))
 
 (defmethod add-before ((i doubly-linked-list-list-iterator) obj)
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (cond ((emptyp i)
            (add list obj)
-           (incf expected-modification-count)
            (reset cursor))
           (t (with-slots (index node) cursor
                (insert-before list node obj)
-               (incf expected-modification-count)
                (incf index)))) ))
 
 (defmethod add-after ((i doubly-linked-list-list-iterator) obj)
-  (with-slots (list cursor expected-modification-count) i
+  (with-slots (list cursor) i
     (cond ((emptyp i)
            (add list obj)
            (reset cursor))
           (t (with-slots (node) cursor
-               (insert-after list node obj))))
-    (incf expected-modification-count)))
+               (insert-after list node obj)))) ))

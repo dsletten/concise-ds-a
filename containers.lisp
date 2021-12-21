@@ -117,6 +117,19 @@
   (error "COLLECTION does not implement EACH"))
 
 ;;;
+;;;    MUTABLE-COLLECTION
+;;;    
+(defclass mutable-collection (collection)
+  ((modification-count :initform 0))
+  (:documentation "A collection whose structure and elements can be modified."))
+
+(defgeneric count-modification (collection)
+  (:documentation "Increase the MODIFICATION-COUNT of this collection."))
+(defmethod count-modification ((c mutable-collection))
+  (with-slots (modification-count) c
+    (incf modification-count)))
+
+;;;
 ;;;    ITERATOR
 ;;;
 ;;;    Design conflict
@@ -168,6 +181,12 @@
   (with-slots (collection expected-modification-count) i
     (setf expected-modification-count (slot-value collection 'modification-count))))
 
+(defgeneric co-modified (iterator)
+  (:documentation "Check whether structure of underlying collection has been changed."))
+(defmethod co-modified ((i mutable-collection-iterator))
+ (with-slots (collection expected-modification-count) i
+   (/= expected-modification-count (slot-value collection 'modification-count))))
+
 (defmethod current :around ((i mutable-collection-iterator))
   (if (co-modified i)
       (error "Iterator invalid due to structural modification of collection")
@@ -191,9 +210,3 @@
 (defmethod done ((i mutable-collection-iterator))
   (declare (ignore i))
   (error "MUTABLE-COLLECTION-ITERATOR does not implement DONE"))
-
-(defgeneric co-modified (iterator)
-  (:documentation "Check whether structure of underlying collection has been changed."))
-(defmethod co-modified ((i mutable-collection-iterator))
- (with-slots (collection expected-modification-count) i
-   (/= expected-modification-count (slot-value collection 'modification-count))))
