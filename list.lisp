@@ -151,10 +151,17 @@
   (declare (ignore l i obj))
   (error "LIST does not implement INSERT"))
 
+;;;
+;;;    Fox's spec simply states that with an out-of-bound index to DELETE
+;;;    "nothing is changed". I added the additional (inconsistent) precondition
+;;;    that it is an error to delete from an empty list.
+;;;    This requires duplication in the :AROUND method for PERSISTENT-LIST
+;;;    and spills over to the unit tests (TEST-CONSTRUCTOR).
+;;;    
 (defgeneric delete (list i)
   (:documentation "Delete the object at the given index."))
 (defmethod delete :around ((l list) (i integer))
-  (cond ((emptyp l) (error "List is empty"))
+  (cond ((emptyp l) (error "List is empty")) ; This is wrong????
         ((minusp i)
          (let ((j (+ i (size l)))) ; {-n, ..., -1} -> {0, ..., n-1}
            (unless (minusp j)
@@ -279,12 +286,22 @@
 
 (defgeneric delete-node (list doomed)
   (:documentation "Delete the specified node from the list."))
+(defmethod delete-node :around ((l linked-list) doomed)
+  (declare (ignore l))
+  (if (null doomed)
+      (error "Invalid node")
+      (call-next-method)))
 (defmethod delete-node ((l linked-list) doomed)
   (declare (ignore l doomed))
   (error "LINKED-LIST does not implement DELETE-NODE"))
 
 (defgeneric delete-child (list parent)
   (:documentation "Delete the child of the specified node from the list."))
+(defmethod delete-child :around ((l linked-list) parent)
+  (declare (ignore l))
+  (if (null parent)
+      (error "Invalid node")
+      (call-next-method)))
 (defmethod delete-child ((l linked-list) parent)
   (declare (ignore l parent))
   (error "LINKED-LIST does not implement DELETE-child"))
@@ -335,7 +352,8 @@
   (zerop (size l)))
 
 (defmethod clear ((l array-list))
-  (setf (fill-pointer store) 0))
+  (with-slots (store) l
+    (setf (fill-pointer store) 0)))
 
 (defmethod iterator ((l array-list))
   (make-instance 'random-access-list-iterator :collection l))
@@ -506,7 +524,7 @@
     (incf count)))
 
 (defmethod delete ((l singly-linked-list) (i integer))
-  (with-slots (store count) l
+  (with-slots (store) l
     (if (zerop i)
         (delete-cons-node l store)
         (delete-cons-child (nthcdr (1- i) store)))) )
@@ -546,8 +564,8 @@
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list) (parent cons))
   (delete-cons-child parent))
-(defmethod delete-child :after ((l singly-linked-list) (node cons))
-  (declare (ignore node))
+(defmethod delete-child :after ((l singly-linked-list) (parent cons))
+  (declare (ignore parent))
   (with-slots (count) l
     (decf count)))
 
@@ -1409,9 +1427,15 @@
 ;;;
 ;;;    PERSISTENT-LIST
 ;;; 
-(defclass persistent-list (list) ; LINKED-LIST???
+(defclass persistent-list (linked-list) ; LINKED-LIST???
   ((store :initform '() :initarg :store)
-   (count :initform 0 :initarg :count))) ; Should we trust this??
+;   (count :initform 0 :initarg :count))) ; Should we trust this??
+   (count))) ; No!
+
+(defmethod initialize-instance :after ((l persistent-list) &rest initargs)
+  (declare (ignore initargs))
+  (with-slots (store count) l
+    (setf count (length store))))
 
 (defmethod print-object ((l persistent-list) stream)
   (print-unreadable-object (l stream :type t)
@@ -1464,7 +1488,8 @@
 (defmethod iterator ((l persistent-list))
   (make-instance 'persistent-list-iterator :list l))
 
-;;list-iterator...
+(defmethod list-iterator ((l persistent-list) &optional (start 0))
+  (make-instance 'persistent-list-list-iterator :list l :cursor (slot-value l 'store) :start start))
 
 (defmethod contains ((l persistent-list) obj &key (test #'eql))
   (with-slots (store) l
@@ -1473,44 +1498,90 @@
 (defmethod add ((l persistent-list) &rest objs)
   (if (null objs)
       l
-      (with-slots (store count) l
-        (loop for i from 0
-              for elt in objs
+      (with-slots (store) l
+        (loop for elt in objs
               collect elt into elts
               finally (return (make-instance 'persistent-list 
                                              :store (append store elts) 
-                                             :count (+ i count)
                                              :type (type l)
                                              :fill-elt (fill-elt l)))) )))
 
 (defmethod insert ((l persistent-list) (i integer) obj)
-  (with-slots (store count) l
-    (make-instance 'persistent-list
-                   :store (loop for j from 0 below i
-                                for cons on store
-                                collect (first cons) into head
-                                finally (return (nconc head (cons obj cons))))
-                   :count (1+ count)
-                   :type (type l)
-                   :fill-elt (fill-elt l))))
+  (with-slots (store) l
+    (insert-before l (nthcdr i store) obj)))
 
+(defmethod insert-before ((l persistent-list) (node cons) obj)
+  (with-slots (store) l
+    (let ((new-store (loop for elt in store
+                           for cons on store
+                           until (eq node cons)
+                           collect elt into elts
+                           finally (return (if (eq node cons)
+                                               (nconc elts (cons obj cons))
+                                               store)))) )
+      (if (eq new-store store)
+          l
+          (make-instance 'persistent-list
+                         :store new-store
+                         :type (type l)
+                         :fill-elt (fill-elt l)))) ))
+
+(defmethod insert-after ((l persistent-list) (node cons) obj)
+  (with-slots (store) l
+    (let ((new-store (loop for elt in store
+                           for cons on store
+                           until (eq node cons)
+                           collect elt into elts
+                           finally (return (if (eq node cons)
+                                               (nconc elts (cons elt (cons obj (rest cons))))
+                                               store)))) )
+      (if (eq new-store store)
+          l
+          (make-instance 'persistent-list
+                         :store new-store
+                         :type (type l)
+                         :fill-elt (fill-elt l)))) ))
+
+(defmethod delete :around ((l persistent-list) (i integer))
+  (cond ((emptyp l) (error "List is empty"))
+        ((>= i (size l)) l)
+        ((< i (- (size l))) l)
+        (t (call-next-method))))
 (defmethod delete ((l persistent-list) (i integer))
-  (with-slots (store count) l
-    (cond ((zerop i) (make-instance 'persistent-list
-                                    :store (rest store)
-                                    :count (1- count)
-                                    :type (type l)
-                                    :fill-elt (fill-elt l)))
-          ((< i count) (make-instance 'persistent-list
-                                    :store (loop for j below i
-                                                 for elt in store
-                                                 for tail on (rest store)
-                                                 collect elt into elts
-                                                 finally (return (nconc elts (rest tail))))
-                                    :count (1- count)
-                                    :type (type l)
-                                    :fill-elt (fill-elt l)))
-          (t l)))) ; Short-circuited by :AROUND method??!?!?!?
+  (with-slots (store) l
+    (delete-node l (nthcdr i store))))
+
+;;;
+;;;    Need to test DELETE-NODE/DELETE-CHILD directly.
+;;;    - Only used by list iterator. Only 1 branch of each called?
+;;;
+;;;    This method _can_ remove last node (unlike mutable list) since list is being rebuilt.
+;;;    
+(defmethod delete-node ((l persistent-list) (doomed cons))
+  (with-slots (store) l
+    (let ((new-store (loop for elt in store
+                           for tail on store
+                           until (eq tail doomed)
+                           collect elt into elts
+                           finally (return (if (eq tail doomed)
+                                               (nconc elts (rest tail))
+                                               store)))) )
+      (if (eq new-store store)
+          (values l nil)
+          (values (make-instance 'persistent-list
+                                 :store new-store
+                                 :type (type l)
+                                 :fill-elt (fill-elt l))
+                  (first doomed)))) ))
+
+;;;
+;;;    Not really needed.
+;;;    
+(defmethod delete-child ((l persistent-list) (parent cons))
+  (let ((child (rest parent)))
+    (if (null child)
+        (error "Parent must have child node")
+        (delete-node l child))))
 
 (defmethod nth ((l persistent-list) (i integer))
   (with-slots (store) l
@@ -1521,16 +1592,20 @@
 ;;;    Simply used for value...
 ;;;    
 (defmethod (setf nth) (obj (l persistent-list) (i integer))
-  (with-slots (store count) l
-    (make-instance 'persistent-list
-                   :store (loop for j below i
-                             for elt in store
-                             for tail on (rest store)
-                             collect elt into elts
-                             finally (return (nconc elts (cons obj (rest tail)))) )
-                   :count count
-                   :type (type l)
-                   :fill-elt (fill-elt l))))
+  (with-slots (store) l
+    (if (zerop i) ; Why 2 cases?! Can't get LOOP to work for both...
+        (make-instance 'persistent-list
+                       :store (cons obj (rest store))
+                       :type (type l)
+                       :fill-elt (fill-elt l))
+        (make-instance 'persistent-list
+                       :store (loop repeat i
+                                    for elt in store
+                                    for tail on (rest store)
+                                    collect elt into elts
+                                    finally (return (nconc elts (cons obj (rest tail)))) )
+                       :type (type l)
+                       :fill-elt (fill-elt l)))) )
 
 (defmethod index ((l persistent-list) obj &key (test #'eql))
   (with-slots (store) l
@@ -1539,11 +1614,9 @@
 (defmethod slice ((l persistent-list) (i integer) (n integer))
   (with-slots (store count) l
     (let* ((start (min i count))
-           (end (min (+ i n) count))
-           (count (- end start)))
+           (end (min (+ i n) count)))
       (make-instance 'persistent-list
                      :store (subseq store start end)
-                     :count count
                      :type (type l)
                      :fill-elt (fill-elt l)))) )
 
@@ -1555,36 +1628,52 @@
 ;;;    Identical to SINGLY-LINKED-LIST-ITERATOR?!
 ;;;    Iterator should be persistent too?!? <-----------------------------------------------------------------------------
 ;;;    
-(defclass persistent-list-iterator (iterator)
-  ((cursor)))
+;; (defclass persistent-list-iterator (iterator)
+;;   ((cursor)))
 
-(defmethod initialize-instance :after ((i persistent-list-iterator) &rest initargs &key (list nil listp) (store nil storep))
-  (declare (ignore initargs))
-  (with-slots (cursor) i
-    (cond (listp (setf cursor (slot-value list 'store))) ; Inappropriate access?
-          (storep (setf cursor store))
-          (t (error "Missing list")))) )
+;; (defmethod initialize-instance :after ((i persistent-list-iterator) &rest initargs &key (list nil listp) (store nil storep))
+;;   (declare (ignore initargs))
+;;   (with-slots (cursor) i
+;;     (cond (listp (setf cursor (slot-value list 'store))) ; Inappropriate access?
+;;           (storep (setf cursor store))
+;;           (t (error "Missing list")))) )
 
-(defmethod current ((i persistent-list-iterator))
-  (with-slots (cursor) i
-    (first cursor)))
+;; (defmethod current ((i persistent-list-iterator))
+;;   (with-slots (cursor) i
+;;     (first cursor)))
+
+;; ;; (defmethod next ((i persistent-list-iterator))
+;; ;;   (with-slots (cursor) i
+;; ;;     (cond ((done i) nil)
+;; ;;           (t (cl:pop cursor)
+;; ;;              (if (done i)
+;; ;;                  nil
+;; ;;                  (current i)))) ))
 
 ;; (defmethod next ((i persistent-list-iterator))
 ;;   (with-slots (cursor) i
-;;     (cond ((done i) nil)
-;;           (t (cl:pop cursor)
-;;              (if (done i)
-;;                  nil
-;;                  (current i)))) ))
+;;     (cond ((done i) i)
+;;           (t (make-instance 'persistent-list-iterator :store (rest cursor)))) ))
+
+;; (defmethod done ((i persistent-list-iterator))
+;;   (with-slots (cursor) i
+;;     (null cursor)))
+
+(defclass persistent-list-iterator (iterator)
+  ((list :initarg :list)))
+
+(defmethod current ((i persistent-list-iterator))
+  (with-slots (list) i
+    (nth list 0)))
 
 (defmethod next ((i persistent-list-iterator))
-  (with-slots (cursor) i
+  (with-slots (list) i
     (cond ((done i) i)
-          (t (make-instance 'persistent-list-iterator :store (rest cursor)))) ))
+          (t (make-instance 'persistent-list-iterator :list (delete list 0)))) ))
 
 (defmethod done ((i persistent-list-iterator))
-  (with-slots (cursor) i
-    (null cursor)))
+  (with-slots (list) i
+    (emptyp list)))
 
 ;;;
 ;;;    LIST-ITERATOR
@@ -2183,3 +2272,123 @@
            (reset cursor))
           (t (with-slots (node) cursor
                (insert-after list node obj)))) ))
+
+;;;
+;;;    PERSISTENT-LIST-LIST-ITERATOR
+;;;    - Must be able to retrieve associated list after structural modifications...
+;;;
+(defclass persistent-list-list-iterator (list-iterator)
+;  ((list :initarg :list)
+  ((list :initarg :list :reader list)
+   (index :type integer :initarg :index :initform 0)
+   (cursor :initarg :cursor :initform '() :type (or null cons))
+   (history :initarg :history :initform (make-instance 'persistent-stack))))
+
+;; (defmethod initialize-instance :after ((i persistent-list-list-iterator) &rest initargs &key (start 0))
+;;   (declare (ignore initargs))
+;;   (with-slots (list index cursor) i
+;;     (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
+;;     (
+    ;; (when (null cursor)
+    ;;   (initialize-persistent-cursor i))))
+;    (loop repeat start do (next i)))) ; Build initial history
+
+;;;
+;;;    Refactor:
+;;;    - Make this tail-recursive
+;;;    - Improve efficiency of creating list iterator (less garbage)
+;;;    - Improve efficiency of creating history stack (less garbage). Provide content directly
+;;;    
+(defmethod make-instance :around ((class (eql (find-class 'persistent-list-list-iterator))) &rest initargs &key (start 0))
+  (cond ((zerop start)
+         (remf initargs :start) ; :START is not legal for next method?!?
+         (apply #'call-next-method class initargs))
+        (t (setf (getf initargs :start) (1- start))
+           (next (apply #'make-instance class initargs)))) )
+
+;;;
+;;;    CURSOR may be detached when:
+;;;    1. List iterator is created on empty list
+;;;    2. List becomes empty
+;;;    
+;; (defun initialize-persistent-cursor (list-iterator)
+;;   (with-slots (list cursor) list-iterator
+;;     (setf cursor (slot-value list 'store))))
+  
+(defmethod type ((i persistent-list-list-iterator))
+  (with-slots (list) i
+    (type list)))
+
+(defmethod emptyp ((i persistent-list-list-iterator))
+  (with-slots (list) i
+    (emptyp list)))
+
+(defmethod current ((i persistent-list-list-iterator))
+  (with-slots (cursor) i
+    (first cursor)))
+
+(defmethod current-index ((i persistent-list-list-iterator))
+  (slot-value i 'index))
+
+;;;
+;;;    SETF method need not actually set anything???
+;;;    Simply used for value...
+;;;    
+(defmethod (setf current) (obj (i persistent-list-list-iterator))
+  (with-slots (list index) i
+    (let ((new-list (setf (nth list index) obj)))
+      (make-instance 'persistent-list-list-iterator :list new-list :cursor (slot-value new-list 'store) :start index))))
+
+(defmethod next ((i persistent-list-list-iterator))
+  (with-slots (list cursor index history) i
+    (cond ((has-next i)
+           (make-instance 'persistent-list-list-iterator :list list :cursor (rest cursor) :index (1+ index) :history (push history cursor)))
+          (t nil))))
+
+(defmethod previous ((i persistent-list-list-iterator))
+  (with-slots (list cursor index history) i
+    (cond ((has-previous i)
+           (make-instance 'persistent-list-list-iterator :list list :cursor (peek history) :index (1- index) :history (pop history)))
+          (t nil))))
+
+(defmethod has-next ((i persistent-list-list-iterator))
+  (with-slots (cursor) i
+    (not (null (rest cursor)))) )
+
+(defmethod has-previous ((i persistent-list-list-iterator))
+  (with-slots (history) i
+    (not (emptyp history))))
+
+(defmethod remove ((i persistent-list-list-iterator))
+  (with-slots (list cursor index) i
+    (let ((new-list (delete-node list cursor)))
+      (make-instance 'persistent-list-list-iterator
+                     :list new-list
+                     :cursor (slot-value new-list 'store)
+                     :start (cond ((has-next i) index)
+                                  ((has-previous i) (1- index))
+                                  (t 0)))) ))
+
+(defmethod add-before ((i persistent-list-list-iterator) obj)
+  (with-slots (list cursor index) i
+    (cond ((emptyp i) (let ((new-list (add list obj)))
+                        (make-instance 'persistent-list-list-iterator
+                                       :list new-list
+                                       :cursor (slot-value new-list 'store))))
+          (t (let ((new-list (insert-before list cursor obj)))
+               (make-instance 'persistent-list-list-iterator
+                              :list new-list
+                              :cursor (slot-value new-list 'store)
+                              :start (1+ index)))) )))
+               
+(defmethod add-after ((i persistent-list-list-iterator) obj)
+  (with-slots (list cursor index) i
+    (cond ((emptyp i) (let ((new-list (add list obj)))
+                        (make-instance 'persistent-list-list-iterator
+                                       :list new-list
+                                       :cursor (slot-value new-list 'store))))
+          (t (let ((new-list (insert-after list cursor obj)))
+               (make-instance 'persistent-list-list-iterator
+                              :list new-list
+                              :cursor (slot-value new-list 'store)
+                              :start index)))) ))

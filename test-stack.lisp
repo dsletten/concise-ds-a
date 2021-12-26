@@ -33,7 +33,7 @@
 
 (use-package :test)
 
-(defun test-constructor (stack-constructor)
+(defun test-stack-constructor (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
     (assert (zerop (size stack)) () "Size of new stack should be zero.")
@@ -51,7 +51,7 @@
         (error "Can't call POP on empty stack.~%")))
     t))
 
-(defun test-emptyp (stack-constructor)
+(defun test-stack-emptyp (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
     (push stack t)
@@ -60,7 +60,7 @@
     (assert (emptyp stack) () "Empty stack should be empty.")
     t))
 
-(defun test-size (stack-constructor &optional (count 1000))
+(defun test-stack-size (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (assert (zerop (size stack)) () "Size of new stack should be zero.")
     (loop for i from 1 to count
@@ -71,7 +71,7 @@
 (defun assert-stack-size (stack n)
   (assert (= (size stack) n) () "Size of stack should be ~D." n))
 
-(defun test-clear (stack-constructor &optional (count 1000))
+(defun test-stack-clear (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (fill-stack stack count)
     (assert (not (emptyp stack)) () "Stack should have ~D elements." count)
@@ -92,7 +92,7 @@
 ;;       (fill-stack stack count)
 ;;       (test-recursive stack (size stack)))) )
 
-(defun test-pop (stack-constructor &optional (count 1000))
+(defun test-stack-pop (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (fill-stack stack count)
     (loop for i from (size stack) downto 1
@@ -111,7 +111,7 @@
 ;;       (fill-stack stack count)
 ;;       (test-recursive stack (size stack)))) )
 
-(defun test-peek (stack-constructor &optional (count 1000))
+(defun test-stack-peek (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (fill-stack stack count)
     (loop for i from (size stack) downto 1
@@ -122,7 +122,7 @@
     (assert (emptyp stack) () "Stack should be empty."))
   t)
 
-(defun test-time (stack-constructor)
+(defun test-stack-time (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (time
      (dotimes (i 10 t)
@@ -130,7 +130,7 @@
          (push stack j))
        (loop until (emptyp stack) do (pop stack)))) ))
 
-(defun test-wave (stack-constructor)
+(defun test-stack-wave (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (fill-stack stack 5000)
     (assert (= (size stack) 5000))
@@ -156,34 +156,34 @@
 
 (deftest test-linked-stack ()
   (check
-   (test-constructor #'(lambda () (make-instance 'linked-stack)))
-   (test-emptyp #'(lambda () (make-instance 'linked-stack)))
-   (test-size #'(lambda () (make-instance 'linked-stack)))
-   (test-clear #'(lambda () (make-instance 'linked-stack)))
-   (test-pop #'(lambda () (make-instance 'linked-stack)))
-   (test-peek #'(lambda () (make-instance 'linked-stack)))
-   (test-time #'(lambda () (make-instance 'linked-stack)))
-   (test-wave #'(lambda () (make-instance 'linked-stack)))) )
+   (test-stack-constructor #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-emptyp #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-size #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-clear #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-pop #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-peek #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-time #'(lambda () (make-instance 'linked-stack)))
+   (test-stack-wave #'(lambda () (make-instance 'linked-stack)))) )
 
 (deftest test-array-stack ()
   (check
-   (test-constructor #'(lambda () (make-instance 'array-stack)))
-   (test-emptyp #'(lambda () (make-instance 'array-stack)))
-   (test-size #'(lambda () (make-instance 'array-stack)))
-   (test-clear #'(lambda () (make-instance 'array-stack)))
-   (test-pop #'(lambda () (make-instance 'array-stack)))
-   (test-peek #'(lambda () (make-instance 'array-stack)))
-   (test-time #'(lambda () (make-instance 'array-stack)))
-   (test-wave #'(lambda () (make-instance 'array-stack)))) )
+   (test-stack-constructor #'(lambda () (make-instance 'array-stack)))
+   (test-stack-emptyp #'(lambda () (make-instance 'array-stack)))
+   (test-stack-size #'(lambda () (make-instance 'array-stack)))
+   (test-stack-clear #'(lambda () (make-instance 'array-stack)))
+   (test-stack-pop #'(lambda () (make-instance 'array-stack)))
+   (test-stack-peek #'(lambda () (make-instance 'array-stack)))
+   (test-stack-time #'(lambda () (make-instance 'array-stack)))
+   (test-stack-wave #'(lambda () (make-instance 'array-stack)))) )
 
 (deftest test-hash-table-stack ()
   (check
-   (test-constructor #'(lambda () (make-instance 'hash-table-stack)))
-   (test-emptyp #'(lambda () (make-instance 'hash-table-stack)))
-   (test-size #'(lambda () (make-instance 'hash-table-stack)))
-   (test-clear #'(lambda () (make-instance 'hash-table-stack))) 
-   (test-pop #'(lambda () (make-instance 'hash-table-stack)))
-   (test-peek #'(lambda () (make-instance 'hash-table-stack)))
-   (test-time #'(lambda () (make-instance 'hash-table-stack))) 
-   (test-wave #'(lambda () (make-instance 'hash-table-stack)))) )
+   (test-stack-constructor #'(lambda () (make-instance 'hash-table-stack)))
+   (test-stack-emptyp #'(lambda () (make-instance 'hash-table-stack)))
+   (test-stack-size #'(lambda () (make-instance 'hash-table-stack)))
+   (test-stack-clear #'(lambda () (make-instance 'hash-table-stack))) 
+   (test-stack-pop #'(lambda () (make-instance 'hash-table-stack)))
+   (test-stack-peek #'(lambda () (make-instance 'hash-table-stack)))
+   (test-stack-time #'(lambda () (make-instance 'hash-table-stack))) 
+   (test-stack-wave #'(lambda () (make-instance 'hash-table-stack)))) )
 

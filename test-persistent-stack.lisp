@@ -32,7 +32,7 @@
 
 (use-package :test)
 
-(defun test-persistent-constructor (stack-constructor)
+(defun test-persistent-stack-constructor (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
     (assert (zerop (size stack)) () "Size of new stack should be zero.")
@@ -50,14 +50,14 @@
         (error "Can't call POP on empty stack.~%")))
     t))
 
-(defun test-persistent-emptyp (stack-constructor)
+(defun test-persistent-stack-emptyp (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
     (assert (not (emptyp (push stack t))) () "Stack with elt should not be empty.")
     (assert (emptyp (pop (push stack t))) () "Empty stack should be empty.")
     t))
 
-(defun test-persistent-size (stack-constructor &optional (count 1000))
+(defun test-persistent-stack-size (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (assert (zerop (size stack)) () "Size of new stack should be zero.")
     (loop for i from 1 to count
@@ -65,7 +65,7 @@
           do (assert (= (size new-stack) i) () "Size of stack should be ~D." i)
           finally (return t))))
 
-(defun test-persistent-clear (stack-constructor &optional (count 1000))
+(defun test-persistent-stack-clear (stack-constructor &optional (count 1000))
   (let ((stack (fill-persistent-stack (funcall stack-constructor) count)))
     (assert (not (emptyp stack)) () "Stack should have ~D elements." count)
     (assert (emptyp (clear stack)) () "Stack should be empty."))
@@ -76,7 +76,7 @@
         for new-stack = (push stack i) then (push new-stack i)   ; ??????? Scope problem without renaming?!??!
         finally (return new-stack)))
 
-(defun test-persistent-pop (stack-constructor &optional (count 1000))
+(defun test-persistent-stack-pop (stack-constructor &optional (count 1000))
   (let ((stack (fill-persistent-stack (funcall stack-constructor) count)))
     (loop for i from (size stack) downto 1
           for (new-stack popped) = (multiple-value-list (pop stack)) then (multiple-value-list (pop new-stack)) 
@@ -85,7 +85,7 @@
           finally (assert (emptyp new-stack) () "Stack should be empty.")))
   t)
 
-(defun test-persistent-peek (stack-constructor &optional (count 1000))
+(defun test-persistent-stack-peek (stack-constructor &optional (count 1000))
   (let ((stack (fill-persistent-stack (funcall stack-constructor) count)))
     (loop for i from (size stack) downto 1
           for peek = (peek stack)
@@ -95,11 +95,11 @@
     (assert (emptyp stack) () "Stack should be empty."))
   t)
 
-(deftest test-persistent-stack ()
+(deftest test-persistent-stack-stack ()
   (check
-   (test-persistent-constructor #'(lambda () (make-instance 'persistent-stack)))
-   (test-persistent-emptyp #'(lambda () (make-instance 'persistent-stack)))
-   (test-persistent-size #'(lambda () (make-instance 'persistent-stack)))
-   (test-persistent-clear #'(lambda () (make-instance 'persistent-stack)))
-   (test-persistent-pop #'(lambda () (make-instance 'persistent-stack)))
-   (test-persistent-peek #'(lambda () (make-instance 'persistent-stack)))) )
+   (test-persistent-stack-constructor #'(lambda () (make-instance 'persistent-stack)))
+   (test-persistent-stack-emptyp #'(lambda () (make-instance 'persistent-stack)))
+   (test-persistent-stack-size #'(lambda () (make-instance 'persistent-stack)))
+   (test-persistent-stack-clear #'(lambda () (make-instance 'persistent-stack)))
+   (test-persistent-stack-pop #'(lambda () (make-instance 'persistent-stack)))
+   (test-persistent-stack-peek #'(lambda () (make-instance 'persistent-stack)))) )
