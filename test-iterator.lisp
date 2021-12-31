@@ -24,7 +24,8 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/test.lisp")
+;(load "/home/slytobias/lisp/packages/test.lisp")
+(load "/Users/dsletten/lisp/packages/test.lisp")
 
 (in-package :containers)
 
@@ -62,7 +63,7 @@
 (deftest test-array-list-iterator ()
   (check
    (let ((al (make-instance 'array-list)))
-     (fill-list al 1000)
+     (fill al 1000)
      (test-iterator al))
    (test-empty-iterator #'(lambda () (make-instance 'array-list)))
    (let ((al (make-instance 'array-list))
@@ -73,7 +74,7 @@
 (deftest test-singly-linked-list-iterator ()
   (check
    (let ((sll (make-instance 'singly-linked-list)))
-     (fill-list sll 1000)
+     (fill sll 1000)
      (test-iterator sll))
    (test-empty-iterator #'(lambda () (make-instance 'singly-linked-list)))
    (let ((sll (make-instance 'singly-linked-list))
@@ -84,7 +85,7 @@
 (deftest test-doubly-linked-list-iterator ()
   (check
    (let ((dll (make-instance 'doubly-linked-list)))
-     (fill-list dll 1000)
+     (fill dll 1000)
      (test-iterator dll))
    (test-empty-iterator #'(lambda () (make-instance 'doubly-linked-list)))
    (let ((dll (make-instance 'doubly-linked-list))
@@ -95,7 +96,7 @@
 (deftest test-hash-table-list-iterator ()
   (check
    (let ((htl (make-instance 'hash-table-list)))
-     (fill-list htl 1000)
+     (fill htl 1000)
      (test-iterator htl))
    (test-empty-iterator #'(lambda () (make-instance 'hash-table-list)))
    (let ((htl (make-instance 'hash-table-list))
@@ -103,4 +104,10 @@
      (apply #'add htl contents)
      (test-iterator-contents htl contents))))
 
+(deftest test-iterator-all ()
+  (check
+   (test-array-list-iterator)
+   (test-singly-linked-list-iterator)
+   (test-doubly-linked-list-iterator)
+   (test-hash-table-list-iterator)))
 

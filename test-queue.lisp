@@ -24,11 +24,17 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/test.lisp")
+;(load "/home/slytobias/lisp/packages/test.lisp")
+(load "/Users/dsletten/lisp/packages/test.lisp")
 
 (in-package :containers)
 
 (use-package :test)
+
+(defmethod fill ((queue queue) &optional (count 1000))
+  (loop for i from 1 to count
+        do (enqueue queue i)
+        finally (return queue)))
 
 (defun test-queue-constructor (queue-constructor)
   (let ((queue (funcall queue-constructor)))
@@ -67,21 +73,17 @@
 
 (defun test-queue-clear (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
-    (fill-queue queue count)
+    (fill queue count)
     (assert (not (emptyp queue)) () "Queue should have ~D elements." count)
     (clear queue)
     (assert (emptyp queue) () "Queue should be empty.")
-    (fill-queue queue 1000)
+    (fill queue 1000)
     (assert (not (emptyp queue)) () "Emptying queue should not break it.")
     t))
 
-(defun fill-queue (queue count)
-  (loop for i from 1 to count
-        do (enqueue queue i)))
-
 (defun test-queue-dequeue (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
-    (fill-queue queue count)
+    (fill queue count)
     (loop for i from 1 upto (size queue)
           for dequeued = (dequeue queue)
           unless (= i dequeued)
@@ -91,7 +93,7 @@
 
 (defun test-queue-front (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
-    (fill-queue queue count)
+    (fill queue count)
     (loop for i from 1 upto (size queue)
           for front = (front queue)
           unless (= i front)
@@ -110,22 +112,22 @@
 
 (defun test-queue-wave (queue-constructor)
   (let ((queue (funcall queue-constructor)))
-    (fill-queue queue 5000)
+    (fill queue 5000)
     (assert (= (size queue) 5000))
     (dotimes (i 3000)
       (dequeue queue))
     (assert (= (size queue) 2000))
-    (fill-queue queue 5000)
+    (fill queue 5000)
     (assert (= (size queue) 7000))
     (dotimes (i 3000)
       (dequeue queue))
     (assert (= (size queue) 4000))
-    (fill-queue queue 5000)
+    (fill queue 5000)
     (assert (= (size queue) 9000))
     (dotimes (i 3000)
       (dequeue queue))
     (assert (= (size queue) 6000))
-    (fill-queue queue 4000)
+    (fill queue 4000)
     (assert (= (size queue) 10000))
     (dotimes (i 10000)
       (dequeue queue))
@@ -197,3 +199,14 @@
    (test-queue-front #'(lambda () (make-instance 'hash-table-queue)))
    (test-queue-time #'(lambda () (make-instance 'hash-table-queue))) 
    (test-queue-wave #'(lambda () (make-instance 'hash-table-queue)))) )
+
+(deftest test-queue-all ()
+  (check
+   (test-linked-queue)
+   (test-circular-queue)
+   (test-recycling-queue)
+   (test-ring-buffer)
+   (test-array-queue)
+   (test-hash-table-queue)))
+
+   
