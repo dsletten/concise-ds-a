@@ -523,7 +523,7 @@
 ;;;    SINGLY-LINKED-LIST
 ;;;    
 (defclass singly-linked-list (mutable-linked-list)
-  ((store :initform '())
+  ((store :reader store :initform '())
    (count :initform 0)))
 
 (defun make-linked-list (&key (type t) (fill-elt nil))
@@ -588,6 +588,7 @@
 ;;;    - If not, MODIFICATION-COUNT, COUNT are modified inappropriately.
 ;;;    
 (defmethod insert-before ((l singly-linked-list) node obj)
+  (declare (ignore l))
   (insert-cons-before node obj))
 (defmethod insert-before :after ((l singly-linked-list) node obj)
   (declare (ignore node obj))
@@ -600,6 +601,7 @@
           (rest node) copy)))
 
 (defmethod insert-after ((l singly-linked-list) node obj)
+  (declare (ignore l))
   (let ((tail (cons obj (rest node))))
     (setf (rest node) tail)))
 (defmethod insert-after :after ((l singly-linked-list) node obj)
@@ -680,9 +682,10 @@
 
 ;;;
 ;;;    SINGLY-LINKED-LIST-X (TCONC)
+;;;    - Keeping track of the rear makes ADD _much_ faster!
 ;;;    
 (defclass singly-linked-list-x (mutable-linked-list)
-  ((front :accessor front :initform nil)
+  ((front :accessor front :reader store :initform nil) ; Two readers?!
    (rear :accessor rear :initform nil)
    (count :initform 0)))
 
@@ -706,7 +709,6 @@
           rear nil
           count 0)))
 
-;;; ??
 (defmethod iterator ((l singly-linked-list-x))
   (make-instance 'singly-linked-list-iterator :collection l))
 
@@ -821,9 +823,9 @@
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list-x) (parent cons))
   (with-slots (rear) l
-    (delete-cons-child-x parent)
-    (when (null (rest parent))
-      (setf rear parent))))
+    (prog1 (delete-cons-child-x parent)
+      (when (null (rest parent))
+        (setf rear parent)))) )
 (defmethod delete-child :after ((l singly-linked-list-x) (parent cons))
   (declare (ignore parent))
   (with-slots (count) l
@@ -864,7 +866,8 @@
 (defmethod initialize-instance :after ((i singly-linked-list-iterator) &rest initargs)
   (declare (ignore initargs))
   (with-slots (cursor collection) i
-    (setf cursor (slot-value collection 'store)))) ; Inappropriate access?
+;    (setf cursor (slot-value collection 'store)))) ; Inappropriate access?
+    (setf cursor (store collection))))
 
 (defmethod current ((i singly-linked-list-iterator))
   (with-slots (cursor) i
@@ -2327,7 +2330,8 @@
 ;;;    
 (defun initialize-cursor (list-iterator)
   (with-slots (list cursor) list-iterator
-    (setf cursor (slot-value list 'store))))
+;    (setf cursor (slot-value list 'store))))
+    (setf cursor (store list))))
   
 (defmethod type ((i singly-linked-list-list-iterator))
   (with-slots (list) i
@@ -2417,7 +2421,8 @@
       (initialize-cursor i))))
 (defmethod has-previous ((i singly-linked-list-list-iterator))
   (with-slots (list cursor) i
-    (not (eq cursor (slot-value list 'store)))) )
+;    (not (eq cursor (slot-value list 'store)))) )
+    (not (eq cursor (store list)))) )
 
 (defmethod remove :before ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
