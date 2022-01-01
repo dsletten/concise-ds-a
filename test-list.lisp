@@ -31,7 +31,7 @@
 
 (use-package :test)
 
-(defmethod fill ((list list) &optional (count 1000))
+(defmethod fill ((list mutable-list) &optional (count 1000))
   (loop for i from 1 to count
         do (add list i)
         finally (return list)))
@@ -338,6 +338,35 @@
 ;;    (test-wave #'(lambda () (make-instance 'array-list)))) )
 ))
 
+(deftest test-array-list-x ()
+  (check
+   (test-list-constructor #'(lambda () (make-instance 'array-list-x)))
+   (test-list-emptyp #'(lambda () (make-instance 'array-list-x)))
+   (test-list-size #'(lambda () (make-instance 'array-list-x)))
+   (test-list-clear #'(lambda () (make-instance 'array-list-x)))
+   (test-list-each #'(lambda () (make-instance 'array-list-x)))
+   (test-list-equals #'(lambda () (make-instance 'array-list-x)))
+   (test-list-equals-test #'(lambda () (make-instance 'array-list-x)))
+   (test-list-contains #'(lambda () (make-instance 'array-list-x)))
+   (test-list-contains-test #'(lambda () (make-instance 'array-list-x)))
+   (test-list-add #'(lambda () (make-instance 'array-list-x)))
+   (test-list-insert #'(lambda (&key fill-elt) (make-instance 'array-list-x :fill-elt fill-elt)))
+   (test-list-insert-fill-zero #'(lambda (&key fill-elt) (make-instance 'array-list-x :fill-elt fill-elt)))
+   (test-list-insert-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-insert-end #'make-array-list-x)
+   (test-list-delete #'(lambda () (make-instance 'array-list-x)))
+   (test-list-delete-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-nth #'(lambda () (make-instance 'array-list-x)))
+   (test-list-nth-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-setf-nth #'(lambda () (make-instance 'array-list-x)))
+   (test-list-setf-nth-out-of-bounds #'(lambda () (make-instance 'array-list-x)))
+   (test-list-setf-nth-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-index-test #'(lambda () (make-instance 'array-list-x)))
+   (test-list-slice #'(lambda () (make-instance 'array-list-x)))
+   (test-list-slice-corner-cases #'(lambda () (make-instance 'array-list-x)))
+   (test-list-time #'(lambda () (make-instance 'array-list-x)))) )
+
 (deftest test-singly-linked-list ()
   (check
    (test-list-constructor #'(lambda () (make-instance 'singly-linked-list)))
@@ -434,6 +463,7 @@
 (deftest test-list-all ()
   (check
    (test-array-list)
+   (test-array-list-x)
    (test-singly-linked-list)
    (test-doubly-linked-list)
    (test-hash-table-list)))
