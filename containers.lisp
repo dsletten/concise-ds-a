@@ -116,6 +116,12 @@
   (declare (ignore c op))
   (error "COLLECTION does not implement EACH"))
 
+(defgeneric fill (collection &optional count)
+  (:documentation "Fill a collection with COUNT values for testing."))
+(defmethod fill ((c collection) &optional count)
+  (declare (ignore c count))
+  (error "COLLECTION does not implement FILL"))
+
 ;;;
 ;;;    MUTABLE-COLLECTION
 ;;;    
