@@ -30,6 +30,11 @@
 
 (use-package :test)
 
+(defmethod fill ((list mutable-list) &optional (count 1000))
+  (loop for i from 1 to count
+        do (add list i)
+        finally (return list)))
+
 (defun test-list-constructor (list-constructor)
   (let ((list (funcall list-constructor)))
     (assert (emptyp list) () "New list should be empty.")
@@ -68,20 +73,14 @@
   (assert (= (size list) n) () "Size of list should be ~D." n))
 
 (defun test-list-clear (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (assert (not (emptyp list)) () "List should have ~D elements." count)
     (clear list)
     (assert (emptyp list) () "List should be empty."))
   t)
 
-(defun fill-list (list count)
-  (loop for i from 1 to count
-        do (add list i)))
-
 (defun test-list-contains (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from 1 to count
           do (assert (= (contains list i) i) () "The list should contain the value ~D" i)))
   t)
@@ -98,12 +97,9 @@
   t)
 
 (defun test-list-equals (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor))
-        (array-list (make-instance 'array-list))
-        (doubly-linked-list (make-instance 'doubly-linked-list)))
-    (fill-list list count)
-    (fill-list array-list count)
-    (fill-list doubly-linked-list count)
+  (let ((list (fill (funcall list-constructor) count))
+        (array-list (fill (make-instance 'array-list) count))
+        (doubly-linked-list (fill (make-instance 'doubly-linked-list) count)))
     (assert (equals list array-list) () "Lists with same content should be equal.")
     (assert (equals array-list list) () "Equality should be commutative.")
     (assert (equals list doubly-linked-list) () "Lists with same content should be equal.")
@@ -176,8 +172,7 @@
   t)
 
 (defun test-list-delete (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for n from count downto 1
           do (assert (= (size list) n) () "List size should reflect deletions")
              (delete list 0))
@@ -185,23 +180,20 @@
   t)
 
 (defun test-list-delete-negative-index (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for n from count downto 1
           do (assert (= (delete list -1) n) () "Deleted element should be last in list"))
     (assert (emptyp list) () "Empty list should be empty."))
   t)
 
 (defun test-list-nth (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from 0 below count
           do (assert (= (nth list i) (1+ i)) () "~:R element should be: ~A" i (1+ i))))
   t)
 
 (defun test-list-nth-negative-index (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from -1 downto (- count)
           do (assert (= (nth list i) (+ count i 1)) () "~:R element should be: ~D not ~D" i (+ count i 1) (nth list i))))
   t)
@@ -215,8 +207,7 @@
   t)
 
 (defun test-list-setf-nth-negative-index (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from -1 downto (- count)
           do (setf (nth list i) i))
     (loop for i from 0 below count
@@ -230,8 +221,7 @@
   t)
 
 (defun test-list-index (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from 1 to count
           do (assert (= (index list i) (1- i)) () "The value ~D should be located at index ~D" (1- i) i)))
   t)
@@ -249,20 +239,18 @@
   t)
 
 (defun test-list-slice (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
-    (let* ((n (floor count 2))
-           (j (floor count 10))
-           (slice (slice list j n)))
-      (assert (= (size slice) n) () "Slice should contain ~D elements" n)
-      (loop repeat n
-            for i from 0
-            do (assert (= (nth slice i) (+ i j 1)) () "Element ~D should have value ~D not ~D" i (+ i j 1) (nth slice i)))) )
+  (let* ((list (fill (funcall list-constructor) count))
+         (n (floor count 2))
+         (j (floor count 10))
+         (slice (slice list j n)))
+    (assert (= (size slice) n) () "Slice should contain ~D elements" n)
+    (loop repeat n
+          for i from 0
+          do (assert (= (nth slice i) (+ i j 1)) () "Element ~D should have value ~D not ~D" i (+ i j 1) (nth slice i))))
   t)
 
 (defun test-list-slice-corner-cases (list-constructor &optional (count 1000))
-  (let ((list (funcall list-constructor)))
-    (fill-list list count)
+  (let ((list (fill (funcall list-constructor) count)))
     (let ((slice (slice list (size list) 10)))
       (assert (emptyp slice) () "Slice at end of list should be empty"))
     (let ((slice (slice list -10 10)))
@@ -279,39 +267,42 @@
 ;;     (time
 ;;      (progn
 ;;        (dotimes (i 10 t)
-;;          (fill-list list 10000) ; This is slow for SINGLY-LINKED-LIST!
+;;          (fill list 10000) ; This is slow for SINGLY-LINKED-LIST!
 ;;          (loop until (emptyp list) do (delete list 0))) ; This is really slow for HASH-TABLE-LIST
 ;;        (dotimes (i 10 t)
-;;          (fill-list list 10000)
+;;          (fill list 10000)
 ;;          (loop until (emptyp list) do (delete list -1)))) ))) ; Very fast for HASH-TABLE-LIST/ARRAY-LIST
 
 (defun test-list-time (list-constructor)
   (let ((list (funcall list-constructor)))
     (time (dotimes (i 10 t)
-            (fill-list list 10000) ; This is slow for SINGLY-LINKED-LIST!
+            (fill list 10000) ; This is slow for SINGLY-LINKED-LIST!
             (loop until (emptyp list) do (delete list 0)))) ; This is really slow for HASH-TABLE-LIST
+;;; More...
+
+
     (time (dotimes (i 10 t)
-            (fill-list list 10000)
+            (fill list 10000)
             (loop until (emptyp list) do (delete list -1)))) )) ; Very fast for HASH-TABLE-LIST/ARRAY-LIST
 
 ;; (defun test-wave (list-constructor)
 ;;   (let ((list (funcall list-constructor)))
-;;     (fill-list list 5000)
+;;     (fill list 5000)
 ;;     (assert (= (size list) 5000))
 ;;     (dotimes (i 3000)
 ;;       (pop list))
 ;;     (assert (= (size list) 2000))
-;;     (fill-list list 5000)
+;;     (fill list 5000)
 ;;     (assert (= (size list) 7000))
 ;;     (dotimes (i 3000)
 ;;       (pop list))
 ;;     (assert (= (size list) 4000))
-;;     (fill-list list 5000)
+;;     (fill list 5000)
 ;;     (assert (= (size list) 9000))
 ;;     (dotimes (i 3000)
 ;;       (pop list))
 ;;     (assert (= (size list) 6000))
-;;     (fill-list list 4000)
+;;     (fill list 4000)
 ;;     (assert (= (size list) 10000))
 ;;     (dotimes (i 10000)
 ;;       (pop list))
@@ -347,6 +338,36 @@
    (test-list-slice-corner-cases #'(lambda () (make-instance 'array-list)))
    (test-list-time #'(lambda () (make-instance 'array-list)))
 ;;    (test-wave #'(lambda () (make-instance 'array-list)))) )
+))
+
+(deftest test-array-list-x ()
+  (check
+   (test-list-constructor #'(lambda () (make-instance 'array-list-x)))
+   (test-list-emptyp #'(lambda () (make-instance 'array-list-x)))
+   (test-list-size #'(lambda () (make-instance 'array-list-x)))
+   (test-list-clear #'(lambda () (make-instance 'array-list-x)))
+   (test-list-each #'(lambda () (make-instance 'array-list-x)))
+   (test-list-equals #'(lambda () (make-instance 'array-list-x)))
+   (test-list-equals-test #'(lambda () (make-instance 'array-list-x)))
+   (test-list-contains #'(lambda () (make-instance 'array-list-x)))
+   (test-list-contains-test #'(lambda () (make-instance 'array-list-x)))
+   (test-list-add #'(lambda () (make-instance 'array-list-x)))
+   (test-list-insert #'(lambda (&key fill-elt) (make-instance 'array-list-x :fill-elt fill-elt)))
+   (test-list-insert-fill-zero #'(lambda (&key fill-elt) (make-instance 'array-list-x :fill-elt fill-elt)))
+   (test-list-insert-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-insert-end #'make-array-list-x)
+   (test-list-delete #'(lambda () (make-instance 'array-list-x)))
+   (test-list-delete-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-nth #'(lambda () (make-instance 'array-list-x)))
+   (test-list-nth-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-setf-nth #'(lambda () (make-instance 'array-list-x)))
+   (test-list-setf-nth-out-of-bounds #'(lambda () (make-instance 'array-list-x)))
+   (test-list-setf-nth-negative-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-index #'(lambda () (make-instance 'array-list-x)))
+   (test-list-index-test #'(lambda () (make-instance 'array-list-x)))
+   (test-list-slice #'(lambda () (make-instance 'array-list-x)))
+   (test-list-slice-corner-cases #'(lambda () (make-instance 'array-list-x)))
+   (test-list-time #'(lambda () (make-instance 'array-list-x)))
 ))
 
 (deftest test-singly-linked-list ()
@@ -442,7 +463,7 @@
 ;;    (test-wave #'(lambda () (make-instance 'hash-table-list)))) )
 ))
 
-(deftest test-all-list ()
+(deftest test-list-all ()
   (check
    (test-array-list)
    (test-singly-linked-list)
@@ -456,7 +477,7 @@
 ;;;    Filling a SINGLY-LINKED-LIST is very slow.
 ;;;    DOUBLY-LINKED-LIST (with single cursor!) performs well overall.
 ;;;    
-;; * (let ((list (make-instance 'array-list))) (time (fill-list list 100000)))
+;; * (let ((list (make-instance 'array-list))) (time (fill list 100000)))
 ;; Evaluation took:
 ;;   0.010 seconds of real time
 ;;   0.010078 seconds of total run time (0.010077 user, 0.000001 system)
@@ -465,7 +486,7 @@
 ;;   5,834,736 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'singly-linked-list))) (time (fill-list list 100000)))
+;; * (let ((list (make-instance 'singly-linked-list))) (time (fill list 100000)))
 ;; Evaluation took:
 ;;   14.807 seconds of real time
 ;;   14.806637 seconds of total run time (14.806637 user, 0.000000 system)
@@ -476,7 +497,7 @@
 
 ;; NIL
 
-;; * (let ((list (make-instance 'doubly-linked-list))) (time (fill-list list 100000)))
+;; * (let ((list (make-instance 'doubly-linked-list))) (time (fill list 100000)))
 ;; Evaluation took:
 ;;   0.016 seconds of real time
 ;;   0.016405 seconds of total run time (0.016405 user, 0.000000 system)
@@ -485,7 +506,7 @@
 ;;   9,624,464 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'hash-table-list))) (time (fill-list list 100000)))
+;; * (let ((list (make-instance 'hash-table-list))) (time (fill list 100000)))
 ;; Evaluation took:
 ;;   0.035 seconds of real time
 ;;   0.034909 seconds of total run time (0.034909 user, 0.000000 system)
@@ -551,7 +572,7 @@
 ;;;
 ;;;    Different implementations perform better deleting from start vs. end...
 ;;;    
-;; * (let ((list (make-instance 'array-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list 0))))
+;; * (let ((list (make-instance 'array-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list 0))))
 ;; Evaluation took:
 ;;   0.134 seconds of real time
 ;;   0.134664 seconds of total run time (0.134664 user, 0.000000 system)
@@ -561,16 +582,16 @@
 ;;   399,729,744 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'singly-linked-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list 0))))
+;; * (let ((list (make-instance 'singly-linked-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list 0))))
 ;; Evaluation took:
-;;   0.001 seconds of real time                 <-- As fast as DOUBLY-LINKED-LIST if FILL-LIST is not included in timing.
+;;   0.001 seconds of real time                 <-- As fast as DOUBLY-LINKED-LIST if FILL is not included in timing.
 ;;   0.000440 seconds of total run time (0.000440 user, 0.000000 system)
 ;;   0.00% CPU
 ;;   1,581,808 processor cycles
 ;;   0 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'doubly-linked-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list 0))))
+;; * (let ((list (make-instance 'doubly-linked-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list 0))))
 ;; Evaluation took:
 ;;   0.001 seconds of real time
 ;;   0.001213 seconds of total run time (0.001213 user, 0.000000 system)
@@ -579,7 +600,7 @@
 ;;   0 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'hash-table-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list 0))))
+;; * (let ((list (make-instance 'hash-table-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list 0))))
 ;; Evaluation took:
 ;;   1.484 seconds of real time
 ;;   1.484654 seconds of total run time (1.484654 user, 0.000000 system)
@@ -588,7 +609,7 @@
 ;;   0 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'array-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list -1))))
+;; * (let ((list (make-instance 'array-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list -1))))
 ;; Evaluation took:
 ;;   0.002 seconds of real time
 ;;   0.001583 seconds of total run time (0.001583 user, 0.000000 system)
@@ -597,7 +618,7 @@
 ;;   163,840 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'singly-linked-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list -1))))
+;; * (let ((list (make-instance 'singly-linked-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list -1))))
 ;; Evaluation took:
 ;;   0.147 seconds of real time
 ;;   0.146859 seconds of total run time (0.146859 user, 0.000000 system)
@@ -606,7 +627,7 @@
 ;;   0 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'doubly-linked-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list -1))))
+;; * (let ((list (make-instance 'doubly-linked-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list -1))))
 ;; Evaluation took:
 ;;   0.007 seconds of real time
 ;;   0.006955 seconds of total run time (0.006955 user, 0.000000 system)
@@ -615,7 +636,7 @@
 ;;   1,932,928 bytes consed
   
 ;; NIL
-;; * (let ((list (make-instance 'hash-table-list))) (fill-list list 10000) (time (loop until (emptyp list) do (delete list -1))))
+;; * (let ((list (make-instance 'hash-table-list))) (fill list 10000) (time (loop until (emptyp list) do (delete list -1))))
 ;; Evaluation took:
 ;;   0.002 seconds of real time
 ;;   0.001526 seconds of total run time (0.001526 user, 0.000000 system)
@@ -647,7 +668,7 @@
 ;; T
 ;; * (test-time #'(lambda () (make-instance 'singly-linked-list)))
 ;; Evaluation took:
-;;   1.546 seconds of real time                     <-- This is the cost of FILL-LIST!!
+;;   1.546 seconds of real time                     <-- This is the cost of FILL!!
 ;;   1.546163 seconds of total run time (1.546163 user, 0.000000 system)
 ;;   100.00% CPU
 ;;   5,566,214,004 processor cycles

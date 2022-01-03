@@ -30,6 +30,11 @@
 
 (use-package :test)
 
+(defmethod fill ((queue persistent-queue) &optional (count 1000))
+  (loop for i from 1 to count
+        for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
+        finally (return new-queue)))
+
 (defun test-persistent-queue-constructor (queue-constructor)
   (let ((queue (funcall queue-constructor)))
     (assert (emptyp queue) () "New queue should be empty.")
@@ -64,18 +69,13 @@
           finally (return t))))
 
 (defun test-persistent-queue-clear (queue-constructor &optional (count 1000))
-  (let ((queue (fill-persistent-queue (funcall queue-constructor) count)))
+  (let ((queue (fill (funcall queue-constructor) count)))
     (assert (not (emptyp queue)) () "Queue should have ~D elements." count)
     (assert (emptyp (clear queue)) () "Queue should be empty."))
   t)
 
-(defun fill-persistent-queue (queue count)
-  (loop for i from 1 to count
-        for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
-        finally (return new-queue)))
-
 (defun test-persistent-queue-dequeue (queue-constructor &optional (count 1000))
-  (let ((queue (fill-persistent-queue (funcall queue-constructor) count)))
+  (let ((queue (fill (funcall queue-constructor) count)))
     (loop for i from 1 upto (size queue)
           for (new-queue dequeued) = (multiple-value-list (dequeue queue)) then (multiple-value-list (dequeue new-queue)) 
           unless (= i dequeued)
@@ -84,7 +84,7 @@
   t)
 
 (defun test-persistent-queue-front (queue-constructor &optional (count 1000))
-  (let ((queue (fill-persistent-queue (funcall queue-constructor) count)))
+  (let ((queue (fill (funcall queue-constructor) count)))
     (loop for i from 1 upto (size queue)
           for front = (front queue)
           unless (= i front)

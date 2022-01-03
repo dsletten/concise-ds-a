@@ -32,7 +32,7 @@
 
 (defun test-list-iterator-vs-iterator (list-constructor &optional (count 1000))
   (let ((list (funcall list-constructor)))
-    (fill-list list count)
+    (fill list count)
     (let ((iterator (iterator list))
           (list-iterator (list-iterator list)))
       (loop until (done iterator)
@@ -57,7 +57,7 @@
 
 (defun test-forward-traversal (list-constructor &optional (count 1000))
   (let ((list (funcall list-constructor)))
-    (fill-list list count)
+    (fill list count)
     (let ((iterator (list-iterator list)))
       (loop for i from 1 upto count
             do (assert (= (current iterator) i) () "Current element of iterator should be ~D not ~D" i (current iterator))
@@ -67,7 +67,7 @@
 
 (defun test-backward-traversal (list-constructor &optional (count 1000))
   (let ((list (funcall list-constructor)))
-    (fill-list list count)
+    (fill list count)
     (let ((iterator (list-iterator list (1- count))))
       (loop for i from count downto 1
             do (assert (= (current iterator) i) () "Current element of iterator should be ~D not ~D" i (current iterator))
@@ -77,7 +77,7 @@
 
 (defun test-remove-forward (list-constructor &optional (count 1000))
   (let ((list (funcall list-constructor)))
-    (fill-list list count)
+    (fill list count)
     (let ((iterator (list-iterator list)))
       (loop for i from 1 upto count
             until (emptyp iterator)
@@ -89,7 +89,7 @@
 
 (defun test-remove-backward (list-constructor &optional (count 1000))
   (let ((list (funcall list-constructor)))
-    (fill-list list count)
+    (fill list count)
     (let ((iterator (list-iterator list (1- count))))
       (loop for i from (1- count) downto 0
             until (emptyp iterator)
@@ -104,7 +104,7 @@
          (mid (truncate count 2))
          (expected (append (loop for i from (1+ mid) upto count collect i)
                            (loop for i from mid downto 1 collect i))))
-    (fill-list list count)
+    (fill list count)
     (let ((iterator (list-iterator list mid)))
       (loop for i from count downto 1
             for elt in expected
@@ -152,7 +152,7 @@
 ;;          (mid (truncate count 2))
 ;;          (expected (append (loop for i from (1+ mid) upto count collect i)
 ;;                            (loop for i from mid downto 1 collect i))))
-;;     (fill-list list count)
+;;     (fill list count)
 ;;     (let ((iterator (list-iterator list mid)))
 ;;       (loop for i from count downto 1
 ;;             for elt in expected
@@ -217,7 +217,7 @@
 
 ))
 
-(deftest test-all-list-iterator ()
+(deftest test-list-iterator-all ()
   (check
    (test-array-list-list-iterator)
    (test-singly-linked-list-list-iterator)

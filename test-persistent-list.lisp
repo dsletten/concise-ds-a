@@ -30,6 +30,11 @@
 
 (use-package :test)
 
+(defmethod fill ((list persistent-list) &optional (count 1000))
+  (loop for i from 1 to count
+        for new-list = (add list i) then (add new-list i)   ; ??????? Scope problem without renaming?!??!
+        finally (return new-list)))
+
 (defun test-persistent-list-constructor (list-constructor)
   (let ((list (funcall list-constructor)))
     (assert (emptyp list) () "New list should be empty.")
@@ -65,18 +70,13 @@
   t)
 
 (defun test-persistent-list-clear (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (assert (not (emptyp list)) () "List should have ~D elements." count)
     (assert (emptyp (clear list)) () "List should be empty."))
   t)
 
-(defun fill-persistent-list (list count)
-  (loop for i from 1 to count
-        for new-list = (add list i) then (add new-list i)   ; ??????? Scope problem without renaming?!??!
-        finally (return new-list)))
-
 (defun test-persistent-list-contains (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from 1 to count
           do (assert (= (contains list i) i) () "The list should contain the value ~D" i)))
   t)
@@ -100,12 +100,10 @@
   t)
 
 (defun test-persistent-list-equals (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count))
-        (persistent-list (fill-persistent-list (make-instance 'persistent-list) count))
-        (array-list (make-instance 'array-list))
-        (doubly-linked-list (make-instance 'doubly-linked-list)))
-    (fill-list array-list count)
-    (fill-list doubly-linked-list count)
+  (let ((list (fill (funcall list-constructor) count))
+        (persistent-list (fill (make-instance 'persistent-list) count))
+        (array-list (fill (make-instance 'array-list) count))
+        (doubly-linked-list (fill (make-instance 'doubly-linked-list) count)))
     (assert (equals list persistent-list) () "Lists with same content should be equal.")
     (assert (equals persistent-list list) () "Equality should be commutative.")
     (assert (equals list array-list) () "Lists with same content should be equal.")
@@ -170,7 +168,7 @@
   t)
 
 (defun test-persistent-list-delete (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (let ((list (loop for n from count downto 0
                       for new-list = list then (delete new-list 0)
                       do (assert (= (size new-list) n) () "List size should reflect deletions")
@@ -180,7 +178,7 @@
   t)
 
 (defun test-persistent-list-delete-negative-index (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (let ((list (loop for n from count downto 1
                       for (new-list deleted) = (multiple-value-list (delete list -1))
                         then (multiple-value-list (delete new-list -1))
@@ -190,13 +188,13 @@
   t)
 
 (defun test-persistent-list-nth (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from 0 below count
           do (assert (= (nth list i) (1+ i)) () "~:R element should be: ~A" i (1+ i))))
   t)
 
 (defun test-persistent-list-nth-negative-index (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from -1 downto (- count)
           do (assert (= (nth list i) (+ count i 1)) () "~:R element should be: ~D not ~D" i (+ count i 1) (nth list i))))
   t)
@@ -211,7 +209,7 @@
   t)
 
 (defun test-persistent-list-setf-nth-negative-index (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (let ((list (loop for i from -1 downto (- count)
                       for new-list = (setf (nth list i) i) then (setf (nth new-list i) i)
                       finally (return new-list))))
@@ -225,7 +223,7 @@
   t)
 
 (defun test-persistent-list-index (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (loop for i from 1 to count
           do (assert (= (index list i) (1- i)) () "The value ~D should be located at index ~D" (1- i) i)))
   t)
@@ -241,7 +239,7 @@
   t)
 
 (defun test-persistent-list-slice (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (let* ((n (floor count 2))
            (j (floor count 10))
            (slice (slice list j n)))
@@ -252,7 +250,7 @@
   t)
 
 (defun test-persistent-list-slice-corner-cases (list-constructor &optional (count 1000))
-  (let ((list (fill-persistent-list (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) count)))
     (let ((slice (slice list (size list) 10)))
       (assert (emptyp slice) () "Slice at end of list should be empty"))
     (let ((slice (slice list -10 10)))
@@ -264,10 +262,10 @@
 (defun test-persistent-list-time (list-constructor)
   (let ((list (funcall list-constructor)))
     (time (dotimes (i 10 t)
-            (loop for new-list = (fill-persistent-list list 10000) then (delete new-list 0)
+            (loop for new-list = (fill list 10000) then (delete new-list 0)
                   until (emptyp new-list))))
     (time (dotimes (i 10 t)
-            (loop for new-list = (fill-persistent-list list 10000) then (delete new-list -1)
+            (loop for new-list = (fill list 10000) then (delete new-list -1)
                   until (emptyp new-list)))) ))
 
 (deftest test-persistent-list ()

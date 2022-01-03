@@ -413,6 +413,104 @@
       al)))
 
 ;;;
+;;;    ARRAY-LIST-X
+;;;    - Add OFFSET slot:
+;;;      DELETE - Move the smaller portion of the array to close the gap
+;;;      INSERT - Reuse space at front of array if possible.
+;;;    
+;;;    - Moving a smaller SUBSEQ does seem to be faster.
+;;;    (let ((a (make-array 1000 :adjustable t :initial-contents (loop for i from 1 to 1000 collect i)))) (time (dotimes (i 100000) (setf (subseq a 200) (subseq a 201)))))
+;;;    (let ((a (make-array 1000 :adjustable t :initial-contents (loop for i from 1 to 1000 collect i)))) (time (dotimes (i 100000) (setf (subseq a 1) (subseq a 0 200)))))
+;;;    
+;;;    - Must release deleted elts to allow GC.
+;;;    - More complicated indexing!
+;;;    
+(defclass array-list-x (mutable-list)
+  ((store)
+   (offset :initform 0 :type integer)))
+
+(defmethod initialize-instance :after ((l array-list-x) &rest initargs)
+  (declare (ignore initargs))
+  (with-slots (store) l
+    (setf store (make-array 20 :adjustable t :fill-pointer 0 :element-type (type l)))) )
+
+(defun make-array-list-x (&key (type t) (fill-elt nil))
+ (make-instance 'array-list-x :type type :fill-elt fill-elt))
+
+(defmethod size ((l array-list-x))
+  (with-slots (store offset) l
+    (- (length store) offset)))
+
+(defmethod emptyp ((l array-list-x))
+  (zerop (size l)))
+
+(defmethod clear ((l array-list-x))
+  (with-slots (store offset) l
+    (setf (fill-pointer store) 0
+          offset 0)))
+
+(defmethod iterator ((l array-list-x))
+  (make-instance 'random-access-list-iterator :collection l))
+
+(defmethod list-iterator ((l array-list-x) &optional (start 0))
+  (make-instance 'random-access-list-list-iterator :list l :start start))
+
+(defmethod contains ((l array-list-x) obj &key (test #'eql))
+  (with-slots (store offset) l
+    (find obj store :start offset :test test)))
+
+(defmethod add ((l array-list-x) &rest objs)
+  (unless (null objs)
+    (with-slots (store) l
+      (dolist (obj objs)
+        (vector-push-extend obj store)))) )
+
+(defmethod insert ((l array-list-x) (i integer) obj)
+  (with-slots (store offset) l
+    (cond ((zerop offset)
+           (vector-push-extend (fill-elt l) store)
+           (setf (subseq store (1+ i)) (subseq store i)
+                 (aref store i) obj))
+          (t (decf offset)
+             (setf (subseq store offset (+ i offset)) (subseq store (1+ offset))
+                   (aref store (+ i offset)) obj)))) )
+
+(defmethod delete ((l array-list-x) (i integer))
+  (with-slots (store offset fill-elt) l
+    (prog1 (aref store (+ i offset))
+      ;; (cond ((= offset i 0) ; This doesn't make a bit of difference?!
+      ;;        (setf (aref store 0) fill-elt)
+      ;;        (incf offset))
+      (cond ((<= (+ i offset) (floor (size l) 2))
+             (setf (subseq store (1+ offset)) (subseq store offset (+ i offset))
+                   (aref store offset) fill-elt)
+             (incf offset))
+            (t (setf (subseq store (+ i offset)) (subseq store (1+ (+ i offset))))
+               (vector-pop store)))) ))
+
+(defmethod nth ((l array-list-x) (i integer))
+  (with-slots (store offset) l
+    (aref store (+ i offset))))
+
+(defmethod (setf nth) (obj (l array-list-x) (i integer))
+  (with-slots (store offset) l
+    (setf (aref store (+ i offset)) obj)))
+
+(defmethod index ((l array-list-x) obj &key (test #'eql))
+  (with-slots (store offset) l
+    (let ((i (position obj store :start offset :test test)))
+      (if (null i)
+          i
+          (- i offset)))) )
+
+(defmethod slice ((l array-list-x) (i integer) (n integer))
+  (with-slots (store offset) l
+    (let ((al (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
+          (count (size l)))
+      (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (aref store (+ k offset))))
+      al)))
+
+;;;
 ;;;    Used by ARRAY-LIST and HASH-TABLE-LIST
 ;;;    
 (defclass random-access-list-iterator (mutable-collection-iterator)
@@ -438,7 +536,7 @@
 ;;;
 ;;;    SINGLY-LINKED-LIST
 ;;;    
-(defclass singly-linked-list (mutable-linked-list)
+(defclass singly-linked-list (mutable-linked-list) ; TCONC!
   ((store :initform '())
    (count :initform 0)))
 
@@ -672,6 +770,33 @@
   ((content :accessor content :initarg :content :initform nil)
    (previous :accessor previous :initarg :previous :initform nil :type (or null dcons))
    (next :accessor next :initarg :next :initform nil :type (or null dcons))))
+
+;; (defclass dcons ()
+;;   ((node)))
+
+;; (defmethod initialize-instance :after ((dcons dcons) &rest initargs &key content)
+;;   (declare (ignore initargs))
+;;   (with-slots (node) dcons
+;;     (setf node (cons content (cons nil nil)))) )
+
+;; (defmethod content ((dcons dcons))
+;;   (with-slots (node) dcons
+;;     (first node)))
+;; (defmethod (setf content) (obj (dcons dcons))
+;;   (with-slots (node) dcons
+;;     (setf (first node) obj)))
+;; (defmethod next ((dcons dcons))
+;;   (with-slots (node) dcons
+;;     (rest (rest node))))
+;; (defmethod (setf next) (obj (dcons dcons))
+;;   (with-slots (node) dcons
+;;     (setf (rest (rest node)) obj)))
+;; (defmethod previous ((dcons dcons))
+;;   (with-slots (node) dcons
+;;     (first (rest node))))
+;; (defmethod (setf previous) (obj (dcons dcons))
+;;   (with-slots (node) dcons
+;;     (setf (first (rest node)) obj)))
 
 ;;;
 ;;;    Toyed with calling this function DCONS. Not quite analogous with CONS...
@@ -1359,6 +1484,9 @@
 (defclass hash-table-list (mutable-list)
   ((store :initform (make-hash-table))))
 
+(defun make-hash-table-list (&key (type t) (fill-elt nil))
+  (make-instance 'hash-table-list :type type :fill-elt fill-elt))
+
 (defmethod size ((l hash-table-list))
   (with-slots (store) l
     (hash-table-count store)))
@@ -1419,15 +1547,17 @@
 
 (defmethod slice ((l hash-table-list) (i integer) (n integer))
   (with-slots (store) l
-    (let ((htl (make-instance 'hash-table-list :type (type l) :fill-elt (fill-elt l)))
+    (let ((htl (make-hash-table-list :type (type l) :fill-elt (fill-elt l)))
           (count (size l)))
       (apply #'add htl (loop for k from (min i count) below (min (+ i n) count) collect (gethash k store)))
       htl)))
 
 ;;;
 ;;;    PERSISTENT-LIST
+;;;    - No point in making this a subclass of LINKED-LIST.
+;;;      No advantage to having reference to "current" node since structure must be rebuilt.
 ;;; 
-(defclass persistent-list (linked-list) ; LINKED-LIST???
+(defclass persistent-list (list)
   ((store :initform '() :initarg :store)
 ;   (count :initform 0 :initarg :count))) ; Should we trust this??
    (count))) ; No!
@@ -1506,50 +1636,73 @@
                                              :type (type l)
                                              :fill-elt (fill-elt l)))) )))
 
+;; (defmethod insert ((l persistent-list) (i integer) obj)
+;;   (with-slots (store) l
+;;     (insert-before l (nthcdr i store) obj)))
 (defmethod insert ((l persistent-list) (i integer) obj)
   (with-slots (store) l
-    (insert-before l (nthcdr i store) obj)))
+    (make-instance 'persistent-list
+                   :store (loop for elt in store
+                                for cons on store
+                                repeat i ; This has to be here!
+                                collect elt into elts
+                                finally (return (nconc elts (cons obj cons))))
+                   :type (type l)
+                   :fill-elt (fill-elt l))))
 
-(defmethod insert-before ((l persistent-list) (node cons) obj)
-  (with-slots (store) l
-    (let ((new-store (loop for elt in store
-                           for cons on store
-                           until (eq node cons)
-                           collect elt into elts
-                           finally (return (if (eq node cons)
-                                               (nconc elts (cons obj cons))
-                                               store)))) )
-      (if (eq new-store store)
-          l
-          (make-instance 'persistent-list
-                         :store new-store
-                         :type (type l)
-                         :fill-elt (fill-elt l)))) ))
+;; (defmethod insert-before ((l persistent-list) (node cons) obj)
+;;   (with-slots (store) l
+;;     (let ((new-store (loop for elt in store
+;;                            for cons on store
+;;                            until (eq node cons)
+;;                            collect elt into elts
+;;                            finally (return (if (eq node cons)
+;;                                                (nconc elts (cons obj cons))
+;;                                                store)))) )
+;;       (if (eq new-store store)
+;;           l
+;;           (make-instance 'persistent-list
+;;                          :store new-store
+;;                          :type (type l)
+;;                          :fill-elt (fill-elt l)))) ))
 
-(defmethod insert-after ((l persistent-list) (node cons) obj)
-  (with-slots (store) l
-    (let ((new-store (loop for elt in store
-                           for cons on store
-                           until (eq node cons)
-                           collect elt into elts
-                           finally (return (if (eq node cons)
-                                               (nconc elts (cons elt (cons obj (rest cons))))
-                                               store)))) )
-      (if (eq new-store store)
-          l
-          (make-instance 'persistent-list
-                         :store new-store
-                         :type (type l)
-                         :fill-elt (fill-elt l)))) ))
+;; (defmethod insert-after ((l persistent-list) (node cons) obj)
+;;   (with-slots (store) l
+;;     (let ((new-store (loop for elt in store
+;;                            for cons on store
+;;                            until (eq node cons)
+;;                            collect elt into elts
+;;                            finally (return (if (eq node cons)
+;;                                                (nconc elts (cons elt (cons obj (rest cons))))
+;;                                                store)))) )
+;;       (if (eq new-store store)
+;;           l
+;;           (make-instance 'persistent-list
+;;                          :store new-store
+;;                          :type (type l)
+;;                          :fill-elt (fill-elt l)))) ))
 
 (defmethod delete :around ((l persistent-list) (i integer))
-  (cond ((emptyp l) (error "List is empty"))
+  (cond ((emptyp l) (error "List is empty")) ; ??????
         ((>= i (size l)) l)
         ((< i (- (size l))) l)
         (t (call-next-method))))
+;; (defmethod delete ((l persistent-list) (i integer))
+;;   (with-slots (store) l
+;;     (delete-node l (nthcdr i store))))
 (defmethod delete ((l persistent-list) (i integer))
   (with-slots (store) l
-    (delete-node l (nthcdr i store))))
+    (multiple-value-bind (new-store doomed)
+        (loop for elt in store
+              for tail on (rest store)
+              repeat i ; This has to be here!
+              collect elt into elts
+              finally (return (values (nconc elts tail) elt)))
+      (values (make-instance 'persistent-list
+                             :store new-store
+                             :type (type l)
+                             :fill-elt (fill-elt l))
+              doomed))))
 
 ;;;
 ;;;    Need to test DELETE-NODE/DELETE-CHILD directly.
@@ -1557,31 +1710,31 @@
 ;;;
 ;;;    This method _can_ remove last node (unlike mutable list) since list is being rebuilt.
 ;;;    
-(defmethod delete-node ((l persistent-list) (doomed cons))
-  (with-slots (store) l
-    (let ((new-store (loop for elt in store
-                           for tail on store
-                           until (eq tail doomed)
-                           collect elt into elts
-                           finally (return (if (eq tail doomed)
-                                               (nconc elts (rest tail))
-                                               store)))) )
-      (if (eq new-store store)
-          (values l nil)
-          (values (make-instance 'persistent-list
-                                 :store new-store
-                                 :type (type l)
-                                 :fill-elt (fill-elt l))
-                  (first doomed)))) ))
+;; (defmethod delete-node ((l persistent-list) (doomed cons))
+;;   (with-slots (store) l
+;;     (let ((new-store (loop for elt in store
+;;                            for tail on store
+;;                            until (eq tail doomed)
+;;                            collect elt into elts
+;;                            finally (return (if (eq tail doomed)
+;;                                                (nconc elts (rest tail))
+;;                                                store)))) )
+;;       (if (eq new-store store)
+;;           (values l nil)
+;;           (values (make-instance 'persistent-list
+;;                                  :store new-store
+;;                                  :type (type l)
+;;                                  :fill-elt (fill-elt l))
+;;                   (first doomed)))) ))
 
-;;;
-;;;    Not really needed.
-;;;    
-(defmethod delete-child ((l persistent-list) (parent cons))
-  (let ((child (rest parent)))
-    (if (null child)
-        (error "Parent must have child node")
-        (delete-node l child))))
+;; ;;;
+;; ;;;    Not really needed.
+;; ;;;    
+;; (defmethod delete-child ((l persistent-list) (parent cons))
+;;   (let ((child (rest parent)))
+;;     (if (null child)
+;;         (error "Parent must have child node")
+;;         (delete-node l child))))
 
 (defmethod nth ((l persistent-list) (i integer))
   (with-slots (store) l
@@ -1852,6 +2005,7 @@
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement CURRENT-INDEX"))
 
 (defmethod (setf current) :around (obj (i mutable-list-list-iterator))
+  (declare (ignore obj))
   (if (co-modified i)
       (error "List iterator invalid due to structural modification of collection")
       (call-next-method)))
@@ -1902,6 +2056,7 @@
   (count-modification i))
 
 (defmethod add-before :around ((i mutable-list-list-iterator) obj)
+  (declare (ignore obj))
   (if (co-modified i)
       (error "List iterator invalid due to structural modification of collection")
       (call-next-method)))
@@ -1913,6 +2068,7 @@
   (count-modification i))
 
 (defmethod add-after :around ((i mutable-list-list-iterator) obj)
+  (declare (ignore obj))
   (if (co-modified i)
       (error "List iterator invalid due to structural modification of collection")
       (call-next-method)))
@@ -2058,6 +2214,7 @@
   (slot-value i 'index))
 
 (defmethod (setf current) :before (obj (i singly-linked-list-list-iterator))
+  (declare (ignore obj))
   (with-slots (cursor) i
     (when (null cursor)
       (initialize-cursor i))))
@@ -2195,6 +2352,7 @@
     (slot-value cursor 'index)))
 
 (defmethod (setf current) :before (obj (i doubly-linked-list-list-iterator))
+  (declare (ignore obj))
   (with-slots (cursor) i
     (unless (initializedp cursor)
       (reset cursor))))
@@ -2282,7 +2440,7 @@
   ((list :initarg :list :reader list)
    (index :type integer :initarg :index :initform 0)
    (cursor :initarg :cursor :initform '() :type (or null cons))
-   (history :initarg :history :initform (make-instance 'persistent-stack))))
+   (history :initarg :history :initform (make-instance 'persistent-stack :type 'cons))))
 
 ;; (defmethod initialize-instance :after ((i persistent-list-list-iterator) &rest initargs &key (start 0))
 ;;   (declare (ignore initargs))
@@ -2343,13 +2501,13 @@
   (with-slots (list cursor index history) i
     (cond ((has-next i)
            (make-instance 'persistent-list-list-iterator :list list :cursor (rest cursor) :index (1+ index) :history (push history cursor)))
-          (t nil))))
+          (t nil))))  ;<-------------------
 
 (defmethod previous ((i persistent-list-list-iterator))
   (with-slots (list cursor index history) i
     (cond ((has-previous i)
            (make-instance 'persistent-list-list-iterator :list list :cursor (peek history) :index (1- index) :history (pop history)))
-          (t nil))))
+          (t nil)))) ;<-------------------
 
 (defmethod has-next ((i persistent-list-list-iterator))
   (with-slots (cursor) i
@@ -2361,7 +2519,7 @@
 
 (defmethod remove ((i persistent-list-list-iterator))
   (with-slots (list cursor index) i
-    (let ((new-list (delete-node list cursor)))
+    (let ((new-list (delete list index)))
       (make-instance 'persistent-list-list-iterator
                      :list new-list
                      :cursor (slot-value new-list 'store)
@@ -2375,7 +2533,7 @@
                         (make-instance 'persistent-list-list-iterator
                                        :list new-list
                                        :cursor (slot-value new-list 'store))))
-          (t (let ((new-list (insert-before list cursor obj)))
+          (t (let ((new-list (insert list index obj)))
                (make-instance 'persistent-list-list-iterator
                               :list new-list
                               :cursor (slot-value new-list 'store)
@@ -2387,7 +2545,7 @@
                         (make-instance 'persistent-list-list-iterator
                                        :list new-list
                                        :cursor (slot-value new-list 'store))))
-          (t (let ((new-list (insert-after list cursor obj)))
+          (t (let ((new-list (insert list (1+ index) obj)))
                (make-instance 'persistent-list-list-iterator
                               :list new-list
                               :cursor (slot-value new-list 'store)

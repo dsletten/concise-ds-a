@@ -33,6 +33,14 @@
 
 (use-package :test)
 
+;;;
+;;;    Not appropriate for PERSISTENT-STACK!
+;;;    
+(defmethod fill ((stack stack) &optional (count 1000))
+  (loop for i from 1 to count
+        do (push stack i)
+        finally (return stack)))
+
 (defun test-stack-constructor (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
@@ -72,16 +80,11 @@
   (assert (= (size stack) n) () "Size of stack should be ~D." n))
 
 (defun test-stack-clear (stack-constructor &optional (count 1000))
-  (let ((stack (funcall stack-constructor)))
-    (fill-stack stack count)
+  (let ((stack (fill (funcall stack-constructor) count)))
     (assert (not (emptyp stack)) () "Stack should have ~D elements." count)
     (clear stack)
     (assert (emptyp stack) () "Stack should be empty.")
     t))
-
-(defun fill-stack (stack count)
-  (loop for i from 1 to count
-        do (push stack i)))
 
 ;; (defun test-pop (stack-constructor &optional (count 1000))
 ;;   (labels ((test-recursive (stack n)
@@ -89,12 +92,11 @@
 ;;                    ((= n (pop stack)) (test-recursive stack (1- n)))
 ;;                    (t (error "Wrong value on stack: ~A should be: ~A~%" (top stack) n))))) ; Value already popped!!!
 ;;     (let ((stack (funcall stack-constructor)))
-;;       (fill-stack stack count)
+;;       (fill stack count)
 ;;       (test-recursive stack (size stack)))) )
 
 (defun test-stack-pop (stack-constructor &optional (count 1000))
-  (let ((stack (funcall stack-constructor)))
-    (fill-stack stack count)
+  (let ((stack (fill (funcall stack-constructor) count)))
     (loop for i from (size stack) downto 1
           for popped = (pop stack)
           unless (= i popped)
@@ -108,12 +110,11 @@
 ;;                    ((= n (top stack)) (pop stack) (test-recursive stack (1- n)))
 ;;                    (t (error "Wrong value on stack: ~A should be: ~A~%" (top stack) n)))))
 ;;     (let ((stack (funcall stack-constructor)))
-;;       (fill-stack stack count)
+;;       (fill stack count)
 ;;       (test-recursive stack (size stack)))) )
 
 (defun test-stack-peek (stack-constructor &optional (count 1000))
-  (let ((stack (funcall stack-constructor)))
-    (fill-stack stack count)
+  (let ((stack (fill (funcall stack-constructor) count)))
     (loop for i from (size stack) downto 1
           for top = (peek stack)
           unless (= i top)
@@ -132,22 +133,22 @@
 
 (defun test-stack-wave (stack-constructor)
   (let ((stack (funcall stack-constructor)))
-    (fill-stack stack 5000)
+    (fill stack 5000)
     (assert (= (size stack) 5000))
     (dotimes (i 3000)
       (pop stack))
     (assert (= (size stack) 2000))
-    (fill-stack stack 5000)
+    (fill stack 5000)
     (assert (= (size stack) 7000))
     (dotimes (i 3000)
       (pop stack))
     (assert (= (size stack) 4000))
-    (fill-stack stack 5000)
+    (fill stack 5000)
     (assert (= (size stack) 9000))
     (dotimes (i 3000)
       (pop stack))
     (assert (= (size stack) 6000))
-    (fill-stack stack 4000)
+    (fill stack 4000)
     (assert (= (size stack) 10000))
     (dotimes (i 10000)
       (pop stack))
@@ -187,3 +188,9 @@
    (test-stack-time #'(lambda () (make-instance 'hash-table-stack))) 
    (test-stack-wave #'(lambda () (make-instance 'hash-table-stack)))) )
 
+(deftest test-stack-all ()
+  (check
+   (test-linked-stack)
+   (test-array-stack)
+   (test-hash-table-stack)))
+   

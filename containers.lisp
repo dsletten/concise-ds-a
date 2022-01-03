@@ -44,7 +44,7 @@
            :array-list :singly-linked-list :doubly-linked-list :hash-table-list :persistent-list
            :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear
            :list-iterator :remove :current-index :has-next :has-previous)
-  (:shadow :type :push :pop :list :nth :delete :remove))
+  (:shadow :type :push :pop :list :nth :delete :remove :fill))
 
 (in-package :containers)
 
@@ -140,6 +140,12 @@
 ;;;        from subclasses. PERSISTENT-LIST-ITERATOR simply has EXPECTED-MODIFICATION-COUNT of 0???
 ;;;        Kind of gross??
 ;;;
+;;;
+;;;
+;;;    Use PARENTS stack for tree iterator (like HISTORY for SINGLY-LINKED-LIST LIST-ITERATOR)
+;;;    - Binary tree: push parent
+;;;    - Arbitrary tree: push parent + remaining children
+;;;    
 (defclass iterator ()
   ()
   (:documentation "External iterator for a collection."))

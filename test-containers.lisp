@@ -28,11 +28,18 @@
 ;;;;
 (load "/home/slytobias/lisp/packages/test.lisp")
 
-(defpackage :test-containers 
-  (:shadowing-import-from :containers :type :push :pop)
-  (:use :common-lisp :containers :test))
+;; (defpackage :test-containers 
+;;   (:shadowing-import-from :containers :type :push :pop)
+;;   (:use :common-lisp :containers :test))
 
-(in-package :test-containers)
+;; (in-package :test-containers)
+
+(in-package :containers)
+
+(use-package :test)
+
+(defgeneric fill (container &optional count)
+  (:documentation "Fill up a container for testing purposes."))
 
 (deftest test-array-stack-size ()
   (let ((stack (make-instance 'array-stack :type 'integer))
