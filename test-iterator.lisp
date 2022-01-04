@@ -70,6 +70,17 @@
      (apply #'add al contents)
      (test-iterator-contents al contents))))
 
+(deftest test-array-list-x-iterator ()
+  (check
+   (let ((al (make-instance 'array-list-x)))
+     (fill al 1000)
+     (test-iterator al))
+   (test-empty-iterator #'(lambda () (make-instance 'array-list-x)))
+   (let ((al (make-instance 'array-list-x))
+         (contents (make-random-contents)))
+     (apply #'add al contents)
+     (test-iterator-contents al contents))))
+
 (deftest test-singly-linked-list-iterator ()
   (check
    (let ((sll (make-instance 'singly-linked-list)))
@@ -77,6 +88,17 @@
      (test-iterator sll))
    (test-empty-iterator #'(lambda () (make-instance 'singly-linked-list)))
    (let ((sll (make-instance 'singly-linked-list))
+         (contents (make-random-contents)))
+     (apply #'add sll contents)
+     (test-iterator-contents sll contents))))
+
+(deftest test-singly-linked-list-x-iterator ()
+  (check
+   (let ((sll (make-instance 'singly-linked-list-x)))
+     (fill sll 1000)
+     (test-iterator sll))
+   (test-empty-iterator #'(lambda () (make-instance 'singly-linked-list-x)))
+   (let ((sll (make-instance 'singly-linked-list-x))
          (contents (make-random-contents)))
      (apply #'add sll contents)
      (test-iterator-contents sll contents))))
@@ -106,6 +128,8 @@
 (deftest test-iterator-all ()
   (check
    (test-array-list-iterator)
+   (test-array-list-x-iterator)
    (test-singly-linked-list-iterator)
+   (test-singly-linked-list-x-iterator)
    (test-doubly-linked-list-iterator)
    (test-hash-table-list-iterator)))

@@ -40,6 +40,9 @@
 
 (defgeneric fill (container &optional count)
   (:documentation "Fill up a container for testing purposes."))
+(defmethod fill ((c collection) &optional count)
+  (declare (ignore c count))
+  (error "COLLECTION does not implement FILL"))
 
 (deftest test-array-stack-size ()
   (let ((stack (make-instance 'array-stack :type 'integer))

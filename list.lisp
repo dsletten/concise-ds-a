@@ -621,7 +621,7 @@
 ;;;    SINGLY-LINKED-LIST
 ;;;    
 (defclass singly-linked-list (mutable-linked-list)
-  ((store :reader store :initform '())
+  ((store :accessor store :initform '())
    (count :initform 0)))
 
 (defun make-linked-list (&key (type t) (fill-elt nil))
@@ -631,7 +631,7 @@
   (slot-value l 'count))
 
 (defmethod emptyp ((l singly-linked-list))
-  (null (slot-value l 'store)))
+  (null (store l)))
 
 (defmethod clear ((l singly-linked-list))
   (with-slots (store count) l
@@ -678,10 +678,6 @@
     (incf count)))
 
 ;;;
-;;;    Make copy of current node. Update current node to
-;;;    become "previous" node in place.
-;;;    
-;;;
 ;;;    Is NODE actually part of the structure of L???
 ;;;    - If not, MODIFICATION-COUNT, COUNT are modified inappropriately.
 ;;;    
@@ -693,6 +689,10 @@
   (with-slots (count) l
     (incf count)))
 
+;;;
+;;;    Make copy of current node. Update current node to
+;;;    become "previous" node in place.
+;;;    
 (defun insert-cons-before (node obj)
   (let ((copy (cons (first node) (rest node))))
     (setf (first node) obj
@@ -700,12 +700,15 @@
 
 (defmethod insert-after ((l singly-linked-list) node obj)
   (declare (ignore l))
-  (let ((tail (cons obj (rest node))))
-    (setf (rest node) tail)))
+  (insert-cons-after node obj))
 (defmethod insert-after :after ((l singly-linked-list) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
+
+(defun insert-cons-after (node obj)
+  (let ((tail (cons obj (rest node))))
+    (setf (rest node) tail)))
 
 (defmethod delete ((l singly-linked-list) (i integer))
   (with-slots (store) l
@@ -732,16 +735,15 @@
     (decf count)))
 
 (defun delete-cons-node (l doomed)
-  (with-slots (store) l
-    (let ((content (first doomed))
-          (saved (rest doomed)))
-      (prog1 content
-        (cond ((eq doomed store) ; First elt
-               (setf store saved))
-              ((null saved) ; Can't delete last node (unless only elt)
-               (error "Current node must have non-nil next node"))
-              (t (setf (first doomed) (first saved)
-                       (rest doomed) (rest saved)))) ))))
+  (let ((content (first doomed))
+        (saved (rest doomed)))
+    (prog1 content
+      (cond ((eq doomed (store l)) ; First elt
+             (setf (store l) saved))
+            ((null saved) ; Can't delete last node (unless only elt)
+             (error "Current node must have non-nil next node"))
+            (t (setf (first doomed) (first saved)
+                     (rest doomed) (rest saved)))) )))
 
 ;;;    DELETE-CHILD cannot delete 1st node in list!
 ;;;    - Route around child.
@@ -783,14 +785,23 @@
 ;;;    - Keeping track of the rear makes ADD _much_ faster!
 ;;;    
 (defclass singly-linked-list-x (mutable-linked-list)
-  ((front :accessor front :reader store :initform nil) ; Two readers?!
-   (rear :accessor rear :initform nil)
+  ((front :accessor store :initform nil) ; Weird accessor
+   (rear :initform nil)
    (count :initform 0)))
 
-(defmethod (setf front) :after (obj (l singly-linked-list-x)) ; ???????????????????????
-  (declare (ignore obj))
-  (when (null (front l))
-    (setf (rear l) nil)))
+;;;
+;;;    Is this a reasonable way to enforce this?
+;;;    Whenever FRONT is nil, ensure that REAR is too...
+;;;    
+;; (defmethod (setf front) :after (obj (l singly-linked-list-x)) ; ???????????????????????
+;;   (declare (ignore obj))
+;;   (when (null (front l))
+;;     (setf (rear l) nil)))
+
+;; (defmethod (setf store) :after (obj (l singly-linked-list-x)) ; ???????????????????????
+;;   (declare (ignore obj))
+;;   (when (null (front l))
+;;     (setf (rear l) nil)))
 
 (defun make-linked-list-x (&key (type t) (fill-elt nil))
   (make-instance 'singly-linked-list-x :type type :fill-elt fill-elt))
@@ -799,7 +810,7 @@
   (slot-value l 'count))
 
 (defmethod emptyp ((l singly-linked-list-x))
-  (null (slot-value l 'front)))
+  (null (store l)))
 
 (defmethod clear ((l singly-linked-list-x))
   (with-slots (front rear count) l
@@ -827,7 +838,7 @@
       (labels ((add-nodes (objs)
                  (loop for i from 0
                        for obj in objs
-                       do (setf rear (setf (rest rear) (cl:list obj)))
+                       do (setf rear (setf (rest rear) (cl:list obj))) ; Enqueue
                        finally (incf count i))))
         (cond ((emptyp l)
                (setf rear (setf front (cl:list (first objs))))
@@ -836,54 +847,45 @@
               (t (add-nodes objs)))) )))
 
 (defmethod insert ((l singly-linked-list-x) (i integer) obj)
-  (with-slots (front rear) l
+  (with-slots (front) l
     (let ((node (nthcdr i front)))
-      (insert-cons-before node obj)
-      (when (eq node rear)
-        (setf rear (rest rear)))) ))
+      (insert-cons-before-x l node obj))))
 (defmethod insert :after ((l singly-linked-list-x) (i integer) obj)
   (declare (ignore i obj))
   (with-slots (count) l
     (incf count)))
 
-;;;
-;;;    Make copy of current node. Update current node to
-;;;    become "previous" node in place.
-;;;    
-;;;
-;;;    Is NODE actually part of the structure of L???
-;;;    - If not, MODIFICATION-COUNT, COUNT are modified inappropriately.
-;;;    
 (defmethod insert-before ((l singly-linked-list-x) node obj)
-  (with-slots (rear) l
-    (insert-cons-before node obj)
-    (when (eq node rear)
-      (setf rear (rest rear)))) )
+  (insert-cons-before-x l node obj))
 (defmethod insert-before :after ((l singly-linked-list-x) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
-(defmethod insert-after ((l singly-linked-list-x) node obj)
+(defun insert-cons-before-x (l node obj)
+  "Update NODE to become 'previous' node in place. Move REAR as necessary."
   (with-slots (rear) l
-    (let ((tail (cons obj (rest node))))
-      (setf (rest node) tail))
+    (insert-cons-before node obj)
     (when (eq node rear)
       (setf rear (rest rear)))) )
+  
+(defmethod insert-after ((l singly-linked-list-x) node obj)
+  (insert-cons-after-x l node obj))
 (defmethod insert-after :after ((l singly-linked-list-x) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
+(defun insert-cons-after-x (l node obj)
+  (with-slots (rear) l
+    (insert-cons-after node obj)
+    (when (eq node rear)
+      (setf rear (rest rear)))) )
+
 (defmethod delete ((l singly-linked-list-x) (i integer))
-  (with-slots (front rear) l
+  (with-slots (front) l
     (cond ((zerop i) (delete-cons-node-x l front))
-           ;; (when (null front)
-           ;;   (setf rear nil)))
-          (t (let ((parent (nthcdr (1- i) front)))
-               (prog1 (delete-cons-child parent)
-                 (when (null (rest parent))
-                   (setf rear parent)))) ))))
+          (t (delete-cons-child-x l (nthcdr (1- i) front)))) ))
 (defmethod delete :after ((l singly-linked-list-x) (i integer))
   (declare (ignore i))
   (with-slots (count) l
@@ -903,38 +905,27 @@
   (with-slots (count) l
     (decf count)))
 
-;;; ?????????????????????
 (defun delete-cons-node-x (l doomed)
-  (with-slots (front) l
-    (let ((content (first doomed))
-          (saved (rest doomed)))
-      (prog1 content
-        (cond ((eq doomed front) ; First elt
-               (setf (front l) saved)) ; ??????????????????????????????????
-              ((null saved) ; Can't delete last node (unless only elt)
-               (error "Current node must have non-nil next node"))
-              (t (setf (first doomed) (first saved)
-                       (rest doomed) (rest saved)))) ))))
+  (with-slots (front rear) l
+    (prog1 (delete-cons-node l doomed)
+      (when (null front)
+	(setf rear nil)))) )
 
 ;;;    DELETE-CHILD cannot delete 1st node in list!
 ;;;    - Route around child.
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list-x) (parent cons))
-  (with-slots (rear) l
-    (prog1 (delete-cons-child parent)
-      (when (null (rest parent))
-        (setf rear parent)))) )
+  (delete-cons-child-x l parent))
 (defmethod delete-child :after ((l singly-linked-list-x) (parent cons))
   (declare (ignore parent))
   (with-slots (count) l
     (decf count)))
 
-;; (defun delete-cons-child-x (parent)
-;;   (let ((child (rest parent)))
-;;     (if (null child)
-;;         (error "Parent must have child node")
-;;         (prog1 (first child)
-;;           (setf (rest parent) (rest child)))) ))
+(defun delete-cons-child-x (l parent)
+  (with-slots (rear) l
+    (prog1 (delete-cons-child parent)
+      (when (null (rest parent))
+        (setf rear parent)))) )
 
 (defmethod nth ((l singly-linked-list-x) (i integer))
   (with-slots (front) l
