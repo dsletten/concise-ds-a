@@ -40,6 +40,11 @@
 ;;;;   List iterator is still valid after its ADD/REMOVE methods are called... How about list methods?
 ;;;;     
 
+;;;;
+;;;;    TODO:
+;;;;    Examine ARRAY-LIST-X DELETE tweaks.
+;;;;    Fix SINGLY-LINKED-LIST iterator/list-iterator STORE vs. FRONT!!!
+;;;;    
 (in-package :containers)
 
 ;; (defvar *sll* (make-instance 'singly-linked-list :type '(satisfies evenp) :fill-elt 0))
@@ -122,7 +127,8 @@
   (:documentation "Add the objects to the end of the list."))
 (defmethod add :around ((l list) &rest objs)
   (if (every #'(lambda (obj) (typep obj (type l))) objs)
-      (call-next-method)
+      (unless (null objs)
+	(call-next-method))
       (error "Type mismatch with OBJS")))
 (defmethod add ((l list) &rest objs)
   (declare (ignore l objs))
@@ -230,6 +236,7 @@
 
 ;;;
 ;;;    MUTABLE-LIST
+;;;    - SETF NTH can change length of list, but that will increment COUNT-MODIFICATION via EXTEND-LIST -> ADD
 ;;;
 (defclass mutable-list (mutable-collection list)
   ()
@@ -366,10 +373,9 @@
     (find obj store :test test)))
 
 (defmethod add ((l array-list) &rest objs)
-  (unless (null objs)
-    (with-slots (store) l
-      (dolist (obj objs) ; Allocate new array?
-        (vector-push-extend obj store)))) )
+  (with-slots (store) l
+    (dolist (obj objs) ; Allocate new array?
+      (vector-push-extend obj store))))
 
 ;;;
 ;;;    i < -size => error or no effect?
@@ -410,90 +416,6 @@
     (let ((al (make-array-list :type (type l) :fill-elt (fill-elt l)))
           (count (size l)))
       (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (aref store k)))
-      al)))
-
-(defclass array-list-x (mutable-list)
-  ((store)
-   (offset :initform 0 :type integer)))
-
-(defmethod initialize-instance :after ((l array-list-x) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (store) l
-    (setf store (make-array 20 :adjustable t :fill-pointer 0 :element-type (type l)))) )
-
-(defun make-array-list-x (&key (type t) (fill-elt nil))
- (make-instance 'array-list-x :type type :fill-elt fill-elt))
-
-(defmethod size ((l array-list-x))
-  (with-slots (store offset) l
-    (- (length store) offset)))
-
-(defmethod emptyp ((l array-list-x))
-  (zerop (size l)))
-
-(defmethod clear ((l array-list-x))
-  (with-slots (store offset) l
-    (setf (fill-pointer store) 0
-          offset 0)))
-
-(defmethod iterator ((l array-list-x))
-  (make-instance 'random-access-list-iterator :collection l))
-
-(defmethod list-iterator ((l array-list-x) &optional (start 0))
-  (make-instance 'random-access-list-list-iterator :list l :start start))
-
-(defmethod contains ((l array-list-x) obj &key (test #'eql))
-  (with-slots (store offset) l
-    (find obj store :start offset :test test)))
-
-(defmethod add ((l array-list-x) &rest objs)
-  (unless (null objs)
-    (with-slots (store) l
-      (dolist (obj objs) ; Allocate new array?
-        (vector-push-extend obj store)))) )
-
-(defmethod insert ((l array-list-x) (i integer) obj)
-  (with-slots (store offset) l
-    (let ((j (+ i offset)))
-      (cond ((or (zerop offset)
-                 (> i (floor (size l) 2)))
-             (vector-push-extend (fill-elt l) store)
-             (setf (subseq store (1+ j)) (subseq store j)))
-            (t (decf offset)
-               (setf (subseq store offset) (subseq store (1+ offset) j))))
-      (setf (aref store (+ i offset)) obj))))
-
-(defmethod delete ((l array-list-x) (i integer))
-  (with-slots (store offset fill-elt) l
-    (let ((j (+ i offset)))
-      (prog1 (aref store j)
-        (cond ((<= i (floor (size l) 2))
-               (setf (subseq store (1+ offset)) (subseq store offset j)
-                     (aref store offset) fill-elt)
-               (incf offset))
-              (t (setf (subseq store j) (subseq store (1+ j)))
-                 (vector-pop store)))) )))
-
-(defmethod nth ((l array-list-x) (i integer))
-  (with-slots (store offset) l
-    (aref store (+ i offset))))
-
-(defmethod (setf nth) (obj (l array-list-x) (i integer))
-  (with-slots (store offset) l
-    (setf (aref store (+ i offset)) obj)))
-
-(defmethod index ((l array-list-x) obj &key (test #'eql))
-  (with-slots (store offset) l
-    (let ((pos (position obj store :start offset :test test)))
-      (if (null pos)
-          pos
-          (- pos offset)))) )
-
-(defmethod slice ((l array-list-x) (i integer) (n integer))
-  (with-slots (store offset) l
-    (let ((al (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
-          (count (size l)))
-      (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (aref store (+ k offset))))
       al)))
 
 ;;;
@@ -544,33 +466,34 @@
     (find obj store :start offset :test test)))
 
 (defmethod add ((l array-list-x) &rest objs)
-  (unless (null objs)
-    (with-slots (store) l
-      (dolist (obj objs)
-        (vector-push-extend obj store)))) )
+  (with-slots (store) l
+    (dolist (obj objs)
+      (vector-push-extend obj store))))
 
 (defmethod insert ((l array-list-x) (i integer) obj)
-  (with-slots (store offset) l
-    (cond ((zerop offset)
-           (vector-push-extend (fill-elt l) store)
-           (setf (subseq store (1+ i)) (subseq store i)
-                 (aref store i) obj))
-          (t (decf offset)
-             (setf (subseq store offset (+ i offset)) (subseq store (1+ offset))
-                   (aref store (+ i offset)) obj)))) )
+  (with-slots (store offset fill-elt) l
+    (let ((j (+ i offset)))
+      (cond ((or (zerop offset)
+                 (> i (floor (size l) 2)))
+             (vector-push-extend fill-elt store)
+             (setf (subseq store (1+ j)) (subseq store j)))
+            (t (decf offset)
+               (setf (subseq store offset) (subseq store (1+ offset) j))))
+      (setf (aref store (+ i offset)) obj))))
 
 (defmethod delete ((l array-list-x) (i integer))
   (with-slots (store offset fill-elt) l
-    (prog1 (aref store (+ i offset))
-      ;; (cond ((= offset i 0) ; This doesn't make a bit of difference?!
-      ;;        (setf (aref store 0) fill-elt)
-      ;;        (incf offset))
-      (cond ((<= (+ i offset) (floor (size l) 2))
-             (setf (subseq store (1+ offset)) (subseq store offset (+ i offset))
-                   (aref store offset) fill-elt)
-             (incf offset))
-            (t (setf (subseq store (+ i offset)) (subseq store (1+ (+ i offset))))
-               (vector-pop store)))) ))
+    (let ((j (+ i offset)))
+      (prog1 (aref store j)
+        (cond ((= i 0) ; This doesn't make a bit of difference?!   Cuts 30%?!?!
+               (setf (aref store offset) fill-elt)
+               (incf offset))
+	      ((<= i (floor (size l) 2)) ; j => 100X time ?!?
+               (setf (subseq store (1+ offset)) (subseq store offset j)
+                     (aref store offset) fill-elt)
+               (incf offset))
+              (t (setf (subseq store j) (subseq store (1+ j)))
+                 (vector-pop store)))) )))
 
 (defmethod nth ((l array-list-x) (i integer))
   (with-slots (store offset) l
@@ -582,10 +505,10 @@
 
 (defmethod index ((l array-list-x) obj &key (test #'eql))
   (with-slots (store offset) l
-    (let ((i (position obj store :start offset :test test)))
-      (if (null i)
-          i
-          (- i offset)))) )
+    (let ((pos (position obj store :start offset :test test)))
+      (if (null pos)
+          pos
+          (- pos offset)))) )
 
 (defmethod slice ((l array-list-x) (i integer) (n integer))
   (with-slots (store offset) l
@@ -621,7 +544,7 @@
 ;;;    SINGLY-LINKED-LIST
 ;;;    
 (defclass singly-linked-list (mutable-linked-list)
-  ((store :accessor store :initform '())
+  ((store :initform '())
    (count :initform 0)))
 
 (defun make-linked-list (&key (type t) (fill-elt nil))
@@ -631,7 +554,8 @@
   (slot-value l 'count))
 
 (defmethod emptyp ((l singly-linked-list))
-  (null (store l)))
+  (with-slots (store) l
+    (null store)))
 
 (defmethod clear ((l singly-linked-list))
   (with-slots (store count) l
@@ -661,13 +585,12 @@
 ;;;    Copy OBJS list and find its length in one traversal.
 ;;;    
 (defmethod add ((l singly-linked-list) &rest objs)
-  (unless (null objs)
-    (with-slots (store count) l
-      (loop for i from 0
-            for elt in objs
-            collect elt into elts
-            finally (progn (setf store (nconc store elts))
-                           (incf count i)))) ))
+  (with-slots (store count) l
+    (loop for i from 0
+          for elt in objs
+          collect elt into elts
+          finally (progn (setf store (nconc store elts))
+                         (incf count i)))) )
 
 (defmethod insert ((l singly-linked-list) (i integer) obj)
   (with-slots (store) l
@@ -712,9 +635,9 @@
 
 (defmethod delete ((l singly-linked-list) (i integer))
   (with-slots (store) l
-    (if (zerop i)
-        (delete-cons-node l store)
-        (delete-cons-child (nthcdr (1- i) store)))) )
+    (cond ((zerop i) (prog1 (first store)
+		       (setf store (rest store))))
+          (t (delete-cons-child (nthcdr (1- i) store)))) ))
 (defmethod delete :after ((l singly-linked-list) (i integer))
   (declare (ignore i))
   (with-slots (count) l
@@ -728,19 +651,21 @@
 ;;;    - NODE is target. Copy child and route around it.
 ;;;    (Child is actually removed.)
 (defmethod delete-node ((l singly-linked-list) (doomed cons))
-  (delete-cons-node l doomed))
+  (with-slots (store) l
+    (cond ((eq doomed store) ; First elt
+	   (prog1 (first store)
+	     (setf store (rest store))))
+	  (t (delete-cons-node doomed)))) )
 (defmethod delete-node :after ((l singly-linked-list) (doomed cons))
   (declare (ignore doomed))
   (with-slots (count) l
     (decf count)))
 
-(defun delete-cons-node (l doomed)
+(defun delete-cons-node (doomed)
   (let ((content (first doomed))
         (saved (rest doomed)))
     (prog1 content
-      (cond ((eq doomed (store l)) ; First elt
-             (setf (store l) saved))
-            ((null saved) ; Can't delete last node (unless only elt)
+      (cond ((null saved) ; Can't delete last node
              (error "Current node must have non-nil next node"))
             (t (setf (first doomed) (first saved)
                      (rest doomed) (rest saved)))) )))
@@ -749,6 +674,7 @@
 ;;;    - Route around child.
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list) (parent cons))
+  (declare (ignore l))
   (delete-cons-child parent))
 (defmethod delete-child :after ((l singly-linked-list) (parent cons))
   (declare (ignore parent))
@@ -785,7 +711,7 @@
 ;;;    - Keeping track of the rear makes ADD _much_ faster!
 ;;;    
 (defclass singly-linked-list-x (mutable-linked-list)
-  ((front :accessor store :initform nil) ; Weird accessor
+  ((front :initform nil)
    (rear :initform nil)
    (count :initform 0)))
 
@@ -810,7 +736,8 @@
   (slot-value l 'count))
 
 (defmethod emptyp ((l singly-linked-list-x))
-  (null (store l)))
+  (with-slots (front) l
+    (null front)))
 
 (defmethod clear ((l singly-linked-list-x))
   (with-slots (front rear count) l
@@ -833,59 +760,72 @@
 ;;;    Copy OBJS list and find its length in one traversal.
 ;;;    
 (defmethod add ((l singly-linked-list-x) &rest objs)
-  (unless (null objs)
-    (with-slots (front rear count) l
-      (labels ((add-nodes (objs)
-                 (loop for i from 0
-                       for obj in objs
-                       do (setf rear (setf (rest rear) (cl:list obj))) ; Enqueue
-                       finally (incf count i))))
-        (cond ((emptyp l)
-               (setf rear (setf front (cl:list (first objs))))
-               (incf count)
-               (add-nodes (rest objs)))
-              (t (add-nodes objs)))) )))
+  (with-slots (front rear count) l
+    (labels ((add-nodes (objs)
+               (loop for i from 0
+                     for obj in objs
+                     do (setf rear (setf (rest rear) (cl:list obj))) ; Enqueue
+                     finally (incf count i))))
+      (cond ((emptyp l)
+             (setf rear (setf front (cl:list (first objs))))
+             (incf count)
+             (add-nodes (rest objs)))
+            (t (add-nodes objs)))) ))
 
 (defmethod insert ((l singly-linked-list-x) (i integer) obj)
-  (with-slots (front) l
+  (with-slots (front rear) l
     (let ((node (nthcdr i front)))
-      (insert-cons-before-x l node obj))))
+      (insert-cons-before node obj)
+      (when (eq node rear)
+	(setf rear (rest rear)))) ))
 (defmethod insert :after ((l singly-linked-list-x) (i integer) obj)
   (declare (ignore i obj))
   (with-slots (count) l
     (incf count)))
 
 (defmethod insert-before ((l singly-linked-list-x) node obj)
-  (insert-cons-before-x l node obj))
+  (with-slots (rear) l
+    (insert-cons-before node obj)
+    (when (eq node rear)
+      (setf rear (rest rear)))) )
 (defmethod insert-before :after ((l singly-linked-list-x) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
-(defun insert-cons-before-x (l node obj)
-  "Update NODE to become 'previous' node in place. Move REAR as necessary."
-  (with-slots (rear) l
-    (insert-cons-before node obj)
-    (when (eq node rear)
-      (setf rear (rest rear)))) )
+;; (defun insert-cons-before-x (l node obj)
+;;   "Update NODE to become 'previous' node in place. Move REAR as necessary."
+;;   (with-slots (rear) l
+;;     (insert-cons-before node obj)
+;;     (when (eq node rear)
+;;       (setf rear (rest rear)))) )
   
 (defmethod insert-after ((l singly-linked-list-x) node obj)
-  (insert-cons-after-x l node obj))
+  (with-slots (rear) l
+    (insert-cons-after node obj)
+    (when (eq node rear)
+      (setf rear (rest rear)))) )
 (defmethod insert-after :after ((l singly-linked-list-x) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
-(defun insert-cons-after-x (l node obj)
-  (with-slots (rear) l
-    (insert-cons-after node obj)
-    (when (eq node rear)
-      (setf rear (rest rear)))) )
+;; (defun insert-cons-after-x (l node obj)
+;;   (with-slots (rear) l
+;;     (insert-cons-after node obj)
+;;     (when (eq node rear)
+;;       (setf rear (rest rear)))) )
 
 (defmethod delete ((l singly-linked-list-x) (i integer))
-  (with-slots (front) l
-    (cond ((zerop i) (delete-cons-node-x l front))
-          (t (delete-cons-child-x l (nthcdr (1- i) front)))) ))
+  (with-slots (front rear) l
+    (cond ((zerop i) (prog1 (first front)
+		       (setf front (rest front))
+		       (when (null front)
+			 (setf rear nil))))
+          (t (let ((parent (nthcdr (1- i) front)))
+	       (prog1 (delete-cons-child parent)
+		 (when (null (rest parent))
+		   (setf rear parent)))) ))))
 (defmethod delete :after ((l singly-linked-list-x) (i integer))
   (declare (ignore i))
   (with-slots (count) l
@@ -899,33 +839,41 @@
 ;;;    - NODE is target. Copy child and route around it.
 ;;;    (Child is actually removed.)
 (defmethod delete-node ((l singly-linked-list-x) (doomed cons))
-  (delete-cons-node-x l doomed))
+  (with-slots (front rear) l
+    (cond ((eq doomed front) (prog1 (first front)
+			       (setf front (rest front))))
+	  (t (delete-cons-node doomed)))) )
 (defmethod delete-node :after ((l singly-linked-list-x) (doomed cons))
   (declare (ignore doomed))
-  (with-slots (count) l
+  (with-slots (front rear count) l
+    (when (null front)
+      (setf rear nil))
     (decf count)))
 
-(defun delete-cons-node-x (l doomed)
-  (with-slots (front rear) l
-    (prog1 (delete-cons-node l doomed)
-      (when (null front)
-	(setf rear nil)))) )
+;; (defun delete-cons-node-x (l doomed)
+;;   (with-slots (front rear) l
+;;     (prog1 (delete-cons-node l doomed)
+;;       (when (null front)
+;; 	(setf rear nil)))) )
 
 ;;;    DELETE-CHILD cannot delete 1st node in list!
 ;;;    - Route around child.
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list-x) (parent cons))
-  (delete-cons-child-x l parent))
+  (with-slots (rear) l
+    (prog1 (delete-cons-child parent)
+      (when (null (rest parent))
+        (setf rear parent)))) )
 (defmethod delete-child :after ((l singly-linked-list-x) (parent cons))
   (declare (ignore parent))
   (with-slots (count) l
     (decf count)))
 
-(defun delete-cons-child-x (l parent)
-  (with-slots (rear) l
-    (prog1 (delete-cons-child parent)
-      (when (null (rest parent))
-        (setf rear parent)))) )
+;; (defun delete-cons-child-x (l parent)
+;;   (with-slots (rear) l
+;;     (prog1 (delete-cons-child parent)
+;;       (when (null (rest parent))
+;;         (setf rear parent)))) )
 
 (defmethod nth ((l singly-linked-list-x) (i integer))
   (with-slots (front) l
@@ -956,7 +904,10 @@
   (declare (ignore initargs))
   (with-slots (cursor collection) i
 ;    (setf cursor (slot-value collection 'store)))) ; Inappropriate access?
-    (setf cursor (store collection))))
+					;    (setf cursor collection)))
+    (if (slot-exists-p collection 'store) ; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	(setf cursor (slot-value collection 'store))
+	(setf cursor (slot-value collection 'front)))) )
 
 (defmethod current ((i singly-linked-list-iterator))
   (with-slots (cursor) i
@@ -1281,11 +1232,11 @@
           (add-nodes store dcons (rest objs)))) )))
 
 (defmethod add :after ((l doubly-linked-list-old) &rest objs)
-  (declare (ignore objs))
-  (with-slots (cursor) l
-    (with-slots (node) cursor
-      (when (null node) ; Initialize cursor
-        (reset cursor)))) )
+  (unless (null objs)
+    (with-slots (cursor) l
+      (with-slots (node) cursor
+	(when (null node) ; Initialize cursor
+          (reset cursor)))) ))
 
 ;;;
 ;;;    This is the critical function to determine the quickest way
@@ -1544,20 +1495,19 @@
 ;; NIL
 
 (defmethod add ((l doubly-linked-list) &rest objs)
-  (unless (null objs)
-    (with-slots (store count) l
-      (labels ((add-nodes (head start elts)
-                 (loop for dcons = start then (next dcons)
-                       for i from 1
-                       for elt in elts
-                       do (dlink dcons (make-instance 'dcons :content elt))
-                       finally (progn (dlink dcons head)
-                                      (incf count i)))) )
-        (let ((dcons (make-instance 'dcons :content (first objs))))
-          (cond ((emptyp l) (setf store dcons))
-                (t (let ((tail (previous store)))
-                     (dlink tail dcons))))
-          (add-nodes store dcons (rest objs)))) )))
+  (with-slots (store count) l
+    (labels ((add-nodes (head start elts)
+               (loop for dcons = start then (next dcons)
+                     for i from 1
+                     for elt in elts
+                     do (dlink dcons (make-instance 'dcons :content elt))
+                     finally (progn (dlink dcons head)
+                                    (incf count i)))) )
+      (let ((dcons (make-instance 'dcons :content (first objs))))
+        (cond ((emptyp l) (setf store dcons))
+              (t (let ((tail (previous store)))
+                   (dlink tail dcons))))
+        (add-nodes store dcons (rest objs)))) ))
 (defmethod add :after ((l doubly-linked-list) &rest objs)
   (declare (ignore objs))
   (with-slots (cursor) l
@@ -1784,11 +1734,10 @@
         (return (gethash i store)))) ))
 
 (defmethod add ((l hash-table-list) &rest objs)
-  (unless (null objs)
-    (with-slots (store) l
-      (loop for i from (size l)
-            for obj in objs
-            do (setf (gethash i store) obj)))) )
+  (with-slots (store) l
+    (loop for i from (size l)
+          for obj in objs
+          do (setf (gethash i store) obj))))
 
 (defmethod insert ((l hash-table-list) (i integer) obj)
   (with-slots (store) l
@@ -2437,8 +2386,11 @@
 ;;;    
 (defun initialize-cursor (list-iterator)
   (with-slots (list cursor) list-iterator
+    (if (slot-exists-p list 'store) ; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	(setf cursor (slot-value list 'store))
+	(setf cursor (slot-value list 'front)))) )
 ;    (setf cursor (slot-value list 'store))))
-    (setf cursor (store list))))
+;    (setf cursor (store list))))
   
 (defmethod type ((i singly-linked-list-list-iterator))
   (with-slots (list) i
@@ -2529,8 +2481,9 @@
       (initialize-cursor i))))
 (defmethod has-previous ((i singly-linked-list-list-iterator))
   (with-slots (list cursor) i
-;    (not (eq cursor (slot-value list 'store)))) )
-    (not (eq cursor (store list)))) )
+    (if (slot-exists-p list 'store) ; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	(not (eq cursor (slot-value list 'store)))
+	(not (eq cursor (slot-value list 'front)))) ))
 
 (defmethod remove :before ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
