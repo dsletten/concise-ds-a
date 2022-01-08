@@ -592,9 +592,13 @@
           finally (progn (setf store (nconc store elts))
                          (incf count i)))) )
 
+;;;
+;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
+;;;    superclass :AFTER methods from incrementing MODIFICATION-COUNT twice!
+;;;    
 (defmethod insert ((l singly-linked-list) (i integer) obj)
   (with-slots (store) l
-    (insert-cons-before (nthcdr i store) obj)))
+    (splice-before (nthcdr i store) obj)))
 (defmethod insert :after ((l singly-linked-list) (i integer) obj)
   (declare (ignore i obj))
   (with-slots (count) l
@@ -606,38 +610,43 @@
 ;;;    
 (defmethod insert-before ((l singly-linked-list) node obj)
   (declare (ignore l))
-  (insert-cons-before node obj))
+  (splice-before node obj))
 (defmethod insert-before :after ((l singly-linked-list) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
 ;;;
-;;;    Make copy of current node. Update current node to
+;;;    Make copy of current node. Surgically update current node to
 ;;;    become "previous" node in place.
 ;;;    
-(defun insert-cons-before (node obj)
+(defgeneric splice-before (node obj)
+  (:documentation "Splice OBJ into chain of nodes before NODE."))
+(defmethod splice-before ((node cons) obj)
   (let ((copy (cons (first node) (rest node))))
     (setf (first node) obj
           (rest node) copy)))
 
 (defmethod insert-after ((l singly-linked-list) node obj)
   (declare (ignore l))
-  (insert-cons-after node obj))
+  (splice-after node obj))
 (defmethod insert-after :after ((l singly-linked-list) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
-(defun insert-cons-after (node obj)
+(defgeneric splice-after (node obj)
+  (:documentation "Splice OBJ into chain of nodes after NODE."))
+(defmethod splice-after ((node cons) obj)
   (let ((tail (cons obj (rest node))))
     (setf (rest node) tail)))
 
 (defmethod delete ((l singly-linked-list) (i integer))
   (with-slots (store) l
-    (cond ((zerop i) (prog1 (first store)
-		       (setf store (rest store))))
-          (t (delete-cons-child (nthcdr (1- i) store)))) ))
+    (cond ((zerop i)
+           (prog1 (first store)
+             (setf store (rest store))))
+          (t (excise-child (nthcdr (1- i) store)))) ))
 (defmethod delete :after ((l singly-linked-list) (i integer))
   (declare (ignore i))
   (with-slots (count) l
@@ -655,18 +664,20 @@
     (cond ((eq doomed store) ; First elt
 	   (prog1 (first store)
 	     (setf store (rest store))))
-	  (t (delete-cons-node doomed)))) )
+	  (t (excise-node doomed)))) )
 (defmethod delete-node :after ((l singly-linked-list) (doomed cons))
   (declare (ignore doomed))
   (with-slots (count) l
     (decf count)))
 
-(defun delete-cons-node (doomed)
+(defgeneric excise-node (doomed)
+  (:documentation "Surgically remove the doomed node from the list."))
+(defmethod excise-node ((doomed cons))
   (let ((content (first doomed))
         (saved (rest doomed)))
     (prog1 content
       (cond ((null saved) ; Can't delete last node
-             (error "Current node must have non-nil next node"))
+             (error "Target node must have non-nil next node"))
             (t (setf (first doomed) (first saved)
                      (rest doomed) (rest saved)))) )))
 
@@ -675,13 +686,15 @@
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list) (parent cons))
   (declare (ignore l))
-  (delete-cons-child parent))
+  (excise-child parent))
 (defmethod delete-child :after ((l singly-linked-list) (parent cons))
   (declare (ignore parent))
   (with-slots (count) l
     (decf count)))
 
-(defun delete-cons-child (parent)
+(defgeneric excise-child (parent)
+  (:documentation "Surgically remove the child of the given node from the list."))
+(defmethod excise-child ((parent cons))
   (let ((child (rest parent)))
     (if (null child)
         (error "Parent must have child node")
@@ -772,10 +785,14 @@
              (add-nodes (rest objs)))
             (t (add-nodes objs)))) ))
 
+;;;
+;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
+;;;    superclass :AFTER methods from incrementing MODIFICATION-COUNT twice!
+;;;    
 (defmethod insert ((l singly-linked-list-x) (i integer) obj)
   (with-slots (front rear) l
     (let ((node (nthcdr i front)))
-      (insert-cons-before node obj)
+      (splice-before node obj)
       (when (eq node rear)
 	(setf rear (rest rear)))) ))
 (defmethod insert :after ((l singly-linked-list-x) (i integer) obj)
@@ -785,7 +802,7 @@
 
 (defmethod insert-before ((l singly-linked-list-x) node obj)
   (with-slots (rear) l
-    (insert-cons-before node obj)
+    (splice-before node obj)
     (when (eq node rear)
       (setf rear (rest rear)))) )
 (defmethod insert-before :after ((l singly-linked-list-x) node obj)
@@ -793,16 +810,9 @@
   (with-slots (count) l
     (incf count)))
 
-;; (defun insert-cons-before-x (l node obj)
-;;   "Update NODE to become 'previous' node in place. Move REAR as necessary."
-;;   (with-slots (rear) l
-;;     (insert-cons-before node obj)
-;;     (when (eq node rear)
-;;       (setf rear (rest rear)))) )
-  
 (defmethod insert-after ((l singly-linked-list-x) node obj)
   (with-slots (rear) l
-    (insert-cons-after node obj)
+    (splice-after node obj)
     (when (eq node rear)
       (setf rear (rest rear)))) )
 (defmethod insert-after :after ((l singly-linked-list-x) node obj)
@@ -810,20 +820,15 @@
   (with-slots (count) l
     (incf count)))
 
-;; (defun insert-cons-after-x (l node obj)
-;;   (with-slots (rear) l
-;;     (insert-cons-after node obj)
-;;     (when (eq node rear)
-;;       (setf rear (rest rear)))) )
-
 (defmethod delete ((l singly-linked-list-x) (i integer))
   (with-slots (front rear) l
-    (cond ((zerop i) (prog1 (first front)
-		       (setf front (rest front))
-		       (when (null front)
-			 (setf rear nil))))
+    (cond ((zerop i)
+           (prog1 (first front)
+	     (setf front (rest front))
+             (when (null front)
+               (setf rear nil))))
           (t (let ((parent (nthcdr (1- i) front)))
-	       (prog1 (delete-cons-child parent)
+	       (prog1 (excise-child parent)
 		 (when (null (rest parent))
 		   (setf rear parent)))) ))))
 (defmethod delete :after ((l singly-linked-list-x) (i integer))
@@ -840,40 +845,31 @@
 ;;;    (Child is actually removed.)
 (defmethod delete-node ((l singly-linked-list-x) (doomed cons))
   (with-slots (front rear) l
-    (cond ((eq doomed front) (prog1 (first front)
-			       (setf front (rest front))))
-	  (t (delete-cons-node doomed)))) )
+    (cond ((eq doomed front)
+           (prog1 (first front)
+	     (setf front (rest front))
+             (when (null front)
+               (setf rear nil))))
+	  (t (prog1 (excise-node doomed)
+               (when (null (rest doomed))
+                 (setf rear doomed)))) )))
 (defmethod delete-node :after ((l singly-linked-list-x) (doomed cons))
   (declare (ignore doomed))
-  (with-slots (front rear count) l
-    (when (null front)
-      (setf rear nil))
+  (with-slots (count) l
     (decf count)))
-
-;; (defun delete-cons-node-x (l doomed)
-;;   (with-slots (front rear) l
-;;     (prog1 (delete-cons-node l doomed)
-;;       (when (null front)
-;; 	(setf rear nil)))) )
 
 ;;;    DELETE-CHILD cannot delete 1st node in list!
 ;;;    - Route around child.
 ;;;    - PARENT cannot itself be last elt.
 (defmethod delete-child ((l singly-linked-list-x) (parent cons))
   (with-slots (rear) l
-    (prog1 (delete-cons-child parent)
+    (prog1 (excise-child parent)
       (when (null (rest parent))
         (setf rear parent)))) )
 (defmethod delete-child :after ((l singly-linked-list-x) (parent cons))
   (declare (ignore parent))
   (with-slots (count) l
     (decf count)))
-
-;; (defun delete-cons-child-x (l parent)
-;;   (with-slots (rear) l
-;;     (prog1 (delete-cons-child parent)
-;;       (when (null (rest parent))
-;;         (setf rear parent)))) )
 
 (defmethod nth ((l singly-linked-list-x) (i integer))
   (with-slots (front) l
@@ -1546,7 +1542,10 @@
                         node)))) )))
 
 (defmethod insert ((l doubly-linked-list) (i integer) obj)
-  (insert-dcons-before l (nth-dcons l i) obj))
+  (with-slots (store) l
+    (splice-before (nth-dcons l i) obj)
+    (when (zerop i)
+      (setf store (previous store)))) )
 (defmethod insert :after ((l doubly-linked-list) (i integer) obj)
   (declare (ignore obj))
   (with-slots (count cursor) l
@@ -1562,7 +1561,10 @@
 ;;;    - If not, MODIFICATION-COUNT, COUNT, CURSOR are modified inappropriately.
 ;;;    
 (defmethod insert-before ((l doubly-linked-list) node obj)
-  (insert-dcons-before l node obj))
+  (with-slots (store) l
+    (splice-before node obj)
+    (when (eq store node)
+      (setf store (previous store)))) )
 (defmethod insert-before :after ((l doubly-linked-list) node obj)
   (declare (ignore node obj))
   (with-slots (count cursor) l
@@ -1570,25 +1572,26 @@
     (with-slots (index) cursor
       (incf index))))
 
-(defun insert-dcons-before (l node obj)
-  (with-slots (store) l
-    (let ((new-dcons (make-instance 'dcons :content obj)))
-      (dlink (previous node) new-dcons)
-      (dlink new-dcons node)
-      (when (eq store node)
-        (setf store new-dcons)))) )
+(defmethod splice-before ((node dcons) obj)
+  (let ((new-dcons (make-instance 'dcons :content obj)))
+    (dlink (previous node) new-dcons)
+    (dlink new-dcons node)))
   
 (defmethod insert-after ((l doubly-linked-list) node obj)
-  (let ((new-dcons (make-instance 'dcons :content obj)))
-    (dlink new-dcons (next node)) ; Do this in the right order!!
-    (dlink node new-dcons)))
+  (declare (ignore l))
+  (splice-after node obj))
 (defmethod insert-after :after ((l doubly-linked-list) node obj)
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
 
+(defmethod splice-after ((node dcons) obj)
+  (let ((new-dcons (make-instance 'dcons :content obj)))
+    (dlink new-dcons (next node)) ; Do this in the right order!!
+    (dlink node new-dcons)))
+
 (defmethod delete ((l doubly-linked-list) (i integer))
-  (delete-dcons-node l (nth-dcons l i)))
+  (delete-dcons l (nth-dcons l i)))
 (defmethod delete :after ((l doubly-linked-list) (i integer))
   (declare (ignore i))
   (with-slots (count cursor) l
@@ -1601,27 +1604,30 @@
 ;;;      
 ;;;    This method needs to be absolutely private! Risky to split an object up like this...
 ;;;    
-
 (defmethod delete-node ((l doubly-linked-list) (doomed dcons))
-  (delete-dcons-node l doomed))
+  (delete-dcons l doomed))
 (defmethod delete-node :after ((l doubly-linked-list) (doomed dcons))
   (declare (ignore doomed))
   (with-slots (count cursor) l
     (decf count)
     (reset cursor))) ; NTH-DCONS moves cursor in most cases?
 
-(defun delete-dcons-node (l doomed)
+(defun delete-dcons (l doomed)
   (with-slots (store) l
+    (cond ((eq doomed (next doomed)) ; Single-elt
+           (setf store '())
+           (content doomed))
+          (t (prog1 (excise-node doomed)
+               (when (eq doomed store) ; First elt otherwise
+                 (setf store (next doomed)))) ))))
+
+(defmethod excise-node ((doomed dcons))
     (let ((content (content doomed))
           (saved (next doomed)))
-    (prog1 content
-      (cond ((eq doomed saved) ; Single-elt
-             (setf store '()))
-            ((eq doomed store) ; First elt otherwise
-             (setf (content doomed) (content saved))
-             (dlink doomed (next saved)))
-            (t (dlink (previous doomed) saved)))) ))) ; Other than first elt
-  
+      (cond ((eq doomed saved) (error "Cannot delete sole node."))
+            (t (prog1 content
+                 (dlink (previous doomed) (next doomed)))) )))
+
 ;;;
 ;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST.
 ;;;    
@@ -1630,13 +1636,19 @@
     (let ((child (next parent)))
       (if (eq child store)
           (error "Parent must have child node")
-          (prog1 (content child)
-            (dlink parent (next child)))) )))
+          (excise-child parent)))) )
 (defmethod delete-child :after ((l doubly-linked-list) (doomed dcons))
   (declare (ignore doomed))
   (with-slots (count cursor) l
     (decf count)
     (reset cursor))) ; NTH-DCONS moves cursor in most cases?
+
+(defmethod excise-child ((parent dcons))
+  (let ((child (next parent)))
+    (if (eq parent child)
+        (error "Parent must have child node")
+        (prog1 (content child)
+          (dlink parent (next child)))) ))
 
 (defmethod nth ((l doubly-linked-list) (i integer))
   (with-slots (store count) l
