@@ -44,6 +44,7 @@
 ;;;;    TODO:
 ;;;;    Examine ARRAY-LIST-X DELETE tweaks.
 ;;;;    Fix SINGLY-LINKED-LIST iterator/list-iterator STORE vs. FRONT!!!
+;;;;    Refactor ERROR messages...
 ;;;;    
 (in-package :containers)
 
@@ -824,7 +825,7 @@
   (with-slots (front rear) l
     (cond ((zerop i)
            (prog1 (first front)
-	     (setf front (rest front))
+             (setf front (rest front))
              (when (null front)
                (setf rear nil))))
           (t (let ((parent (nthcdr (1- i) front)))
@@ -1615,17 +1616,17 @@
 (defun delete-dcons (l doomed)
   (with-slots (store) l
     (cond ((eq doomed (next doomed)) ; Single-elt
-           (setf store '())
-           (content doomed))
+           (prog1 (content doomed)
+             (setf (next doomed) nil ; Free for GC!
+                   store '())))
           (t (prog1 (excise-node doomed)
                (when (eq doomed store) ; First elt otherwise
                  (setf store (next doomed)))) ))))
 
 (defmethod excise-node ((doomed dcons))
-    (let ((content (content doomed))
-          (saved (next doomed)))
+    (let ((saved (next doomed)))
       (cond ((eq doomed saved) (error "Cannot delete sole node."))
-            (t (prog1 content
+            (t (prog1 (content doomed)
                  (dlink (previous doomed) (next doomed)))) )))
 
 ;;;
