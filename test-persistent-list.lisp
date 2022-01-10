@@ -31,9 +31,7 @@
 (use-package :test)
 
 (defmethod fill ((list persistent-list) &optional (count 1000))
-  (loop for i from 1 to count
-        for new-list = (add list i) then (add new-list i)   ; ??????? Scope problem without renaming?!??!
-        finally (return new-list)))
+  (apply #'add list (loop for i from 1 to count collect i)))
 
 (defun test-persistent-list-constructor (list-constructor)
   (let ((list (funcall list-constructor)))

@@ -31,9 +31,8 @@
 (use-package :test)
 
 (defmethod fill ((list mutable-list) &optional (count 1000))
-  (loop for i from 1 to count
-        do (add list i)
-        finally (return list)))
+  (apply #'add list (loop for i from 1 to count collect i))
+  list)
 
 (defun test-list-constructor (list-constructor)
   (let ((list (funcall list-constructor)))

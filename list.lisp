@@ -37,7 +37,14 @@
 ;;;;     (This would screw up GC!)
 ;;;;
 ;;;;   Iterator becomes invalidated if associated list is structurally modified?
-;;;;   List iterator is still valid after its ADD/REMOVE methods are called... How about list methods?
+;;;;   List iterator is still valid after its ADD/REMOVE methods are called... How about list methods? No
+;;;;
+;;;;   Be cautious with this pattern:
+;;;;     (with-slots (list cursor) i
+;;;;       (with-slots (index node) cursor
+;;;;
+;;;;   The first level of WITH-SLOTS is fine. Same as having access to private instance vars in Java class.
+;;;;   But the 2nd level is reaching into some other object.
 ;;;;     
 
 ;;;;
@@ -1046,7 +1053,7 @@
 (defmethod initialize-instance :after ((c dcursor) &rest initargs)
   (declare (ignore initargs))
   (with-slots (list node) c
-    (setf node (slot-value list 'store)))) ; Empty???
+    (setf node (slot-value list 'store)))) ; Empty LIST => (null node)
 
 (defun initializedp (cursor)
   (not (null (slot-value cursor 'node))))
@@ -1094,6 +1101,19 @@
           do (decf index)
              (setf node (previous node)))
     (setf index (mod index (size list)))) )
+
+;;;
+;;;    This can allow DCURSOR to get out of sync!
+;;;    
+(defgeneric bump (cursor)
+  (:documentation "Nudge cursor ahead by one node when removing a node."))
+(defmethod bump :around ((c dcursor))
+  (if (initializedp c)
+      (call-next-method)
+      (error "Cursor has not been initialized")))
+(defmethod bump ((c dcursor))
+  (with-slots (node) c
+    (setf node (next node))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -2413,26 +2433,26 @@
   (with-slots (list) i
     (emptyp list)))
 
-(defmethod current :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod current :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod current ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (first cursor)))
 
-(defmethod current-index :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod current-index :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod current-index ((i singly-linked-list-list-iterator))
   (slot-value i 'index))
 
-(defmethod (setf current) :before (obj (i singly-linked-list-list-iterator))
-  (declare (ignore obj))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod (setf current) :before (obj (i singly-linked-list-list-iterator))
+;;   (declare (ignore obj))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod (setf current) (obj (i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (setf (first cursor) obj)))
@@ -2440,10 +2460,10 @@
 ;;;
 ;;;    CURSOR is NIL but STORE is not?? (List iterator created with empty list?)
 ;;;    
-(defmethod next :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod next :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod next ((i singly-linked-list-list-iterator))
   (with-slots (cursor index history) i
     (cond ((has-next i)
@@ -2468,10 +2488,10 @@
 ;;              (current i)))
 ;;           (t nil))))
 
-(defmethod previous :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod previous :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod previous ((i singly-linked-list-list-iterator))
   (with-slots (cursor index history) i
     (cond ((has-previous i)
@@ -2480,33 +2500,36 @@
            (current i))
           (t nil))))
 
-(defmethod has-next :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod has-next :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod has-next ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
-    (not (null (rest cursor)))) )
+    (not (or (null cursor)
+             (null (rest cursor)))) ))
 
-(defmethod has-previous :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod has-previous :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod has-previous ((i singly-linked-list-list-iterator))
   (with-slots (list cursor) i
     (if (slot-exists-p list 'store) ; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	(not (eq cursor (slot-value list 'store)))
-	(not (eq cursor (slot-value list 'front)))) ))
+	(not (or (null cursor) ; This is actually redundant...
+                 (eq cursor (slot-value list 'store))))
+	(not (or (null cursor)
+                 (eq cursor (slot-value list 'front)))) )))
 
-(defmethod remove :before ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod remove :before ((i singly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (when (null cursor)
+;;       (initialize-cursor i))))
 (defmethod remove ((i singly-linked-list-list-iterator))
   (with-slots (list cursor index history) i
     (cond ((zerop index)
            (prog1 (delete-node list cursor)
-             (initialize-cursor i)))
+             (initialize-cursor i))) ; Allow GC
           (t (let ((parent (peek history)))
                (cond ((has-next i) (setf cursor (rest cursor)))
                      (t (setf cursor (pop history))
@@ -2552,36 +2575,36 @@
   (with-slots (list) i
     (emptyp list)))
 
-(defmethod current :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod current :before ((i doubly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod current ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (content (slot-value cursor 'node))))
 
-(defmethod current-index :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod current-index :before ((i doubly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod current-index ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (slot-value cursor 'index)))
 
-(defmethod (setf current) :before (obj (i doubly-linked-list-list-iterator))
-  (declare (ignore obj))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod (setf current) :before (obj (i doubly-linked-list-list-iterator))
+;;   (declare (ignore obj))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod (setf current) (obj (i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (with-slots (node) cursor
       (setf (content node) obj))))
 
-(defmethod next :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod next :before ((i doubly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod next ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (cond ((has-next i)
@@ -2589,10 +2612,10 @@
            (current i))
           (t nil))))
 
-(defmethod previous :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod previous :before ((i doubly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod previous ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (cond ((has-previous i)
@@ -2600,34 +2623,36 @@
            (current i))
           (t nil))))
 
-(defmethod has-next :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod has-next :before ((i doubly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod has-next ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (at-end-p cursor))))
 
-(defmethod has-previous :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (unless (initializedp cursor)
-      (reset cursor))))
+;; (defmethod has-previous :before ((i doubly-linked-list-list-iterator))
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 (defmethod has-previous ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (at-start-p cursor))))
 
-(defmethod remove :before ((i doubly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (when (null cursor)
-      (initialize-cursor i))))
+;; (defmethod remove :before ((i doubly-linked-list-list-iterator)) ; Is this necessary? :AROUND  catches empty list 
+;;   (with-slots (cursor) i
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
+;;     ;; (when (null cursor)
+;;     ;;   (initialize-cursor i))))
 (defmethod remove ((i doubly-linked-list-list-iterator))
   (with-slots (list cursor) i
     (with-slots (index node) cursor
       (cond ((zerop index)
              (prog1 (delete-node list node)
-               (reset cursor)))
+               (reset cursor))) ; Allow GC
             (t (let ((current-node node))
-                 (cond ((has-next i) (setf node (next node))) ; Half advance...
+                 (cond ((has-next i) (bump cursor))
                        (t (rewind cursor)))
                  (delete-node list current-node)))) )))
 
