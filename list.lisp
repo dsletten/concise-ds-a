@@ -1034,6 +1034,26 @@
   (setf (next previous) next
         (previous next) previous))
 
+(defclass private-dcons ()
+  ((content)
+   (set-content)
+   (previous)
+   (set-previous)
+   (next)
+   (set-next)))
+
+(defmethod initialize-instance :after ((dcons private-dcons) &rest initargs &key ((:content c)))
+  (declare (ignore initargs))
+  (let ((n nil)
+        (p nil))
+    (with-slots (content set-content previous set-previous next set-next) dcons
+      (setf content #'(lambda () c)
+            set-content #'(lambda (obj) (setf c obj))
+            previous #'(lambda () p)
+            set-previous #'(lambda (node) (setf p node))
+            next #'(lambda () n)
+            set-next #'(lambda (node) (setf n node)))) ))
+
 ;;;
 ;;;    There is an intimate connection between a cursor and its associated list.
 ;;;    Cursor will be attached to a list at the list's creation. However, the list
