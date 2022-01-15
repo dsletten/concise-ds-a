@@ -178,9 +178,26 @@
 ;;;
 ;;;
 ;;;    (reduce #'(lambda (s elt) (push s elt)) '(2 4 6 8) :initial-value *ps*)
+;; (defclass persistent-stack (stack)
+;;   ((top :initform '() :initarg :top)
+;; ;   (count :initform 0 :initarg :count))) ; Should not rely on arg?? Consistent with (length top)???
+;;    (count :type integer)))
+
 (defclass persistent-stack (stack)
-  ((top :initform '() :initarg :top)
-   (count :initform 0 :initarg :count))) ; Should not rely on arg?? Consistent with (length top)???
+  ((top :initform '())
+   (count :initform 0 :type integer)))
+
+;; (defmethod initialize-instance :after ((s persistent-stack) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (top count) s
+;;     (setf count (length top))))
+
+(defun initialize-stack (type top count)
+  (let ((new-stack (make-instance 'persistent-stack :type type)))
+    (with-slots ((new-top top) (new-count count)) new-stack
+      (setf new-top top
+            new-count count))
+    new-stack))
 
 (defmethod size ((s persistent-stack))
   (with-slots (count) s
@@ -195,11 +212,15 @@
 
 (defmethod push ((s persistent-stack) obj)
   (with-slots (type top count) s
-    (make-instance 'persistent-stack :type type :top (cons obj top) :count (1+ count))))
+;    (make-instance 'persistent-stack :type type :top (cons obj top) :count (1+ count))))
+;    (make-instance 'persistent-stack :type type :top (cons obj top))))
+    (initialize-stack type (cons obj top) (1+ count))))
 
 (defmethod pop ((s persistent-stack))
   (with-slots (type top count) s
-    (values (make-instance 'persistent-stack :type type :top (rest top) :count (1- count)) (peek s))))
+;    (values (make-instance 'persistent-stack :type type :top (rest top) :count (1- count)) (peek s))))
+;    (values (make-instance 'persistent-stack :type type :top (rest top)) (peek s))))
+    (values (initialize-stack type (rest top) (1- count)) (peek s))))
 
 (defmethod peek ((s persistent-stack))
   (with-slots (top) s

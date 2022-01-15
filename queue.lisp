@@ -22,7 +22,10 @@
 ;;;;   Example:
 ;;;;
 ;;;;   Notes:
-;;;;
+;;;;   - ARRAY-QUEUE is the traditional ring buffer. (另见 (ADJUSTABLE-)CIRCULAR-ARRAY-QUEUE in "foundations")
+;;;;   - CIRCULAR-QUEUE, RECYCLING-QUEUE, and RING-BUFFER are just variants of LINKED-QUEUE:
+;;;;     - CIRCULAR-QUEUE grows/shrinks with each operation.
+;;;;     - RECYCLING-QUEUE/RING-BUFFER start pre-allocated, overwrite existing CONSes, grow as needed and never shrink.
 ;;;;
 
 (in-package :containers)
@@ -79,6 +82,8 @@
 ;;;
 ;;;    ARRAY-QUEUE - Uses "circular" array. As long as there is room, queue can
 ;;;    wrap around from end of array to start.
+;;;    - Ring buffer
+;;;    - Never shrinks?!
 ;;;    
 (defconstant array-queue-capacity 20)
 
@@ -108,7 +113,7 @@
 ;;           count 0)))
 
 ;;;   Queue full?
-;;;   2 approaches to a fixed-size (array) queue:
+;;;   2 approaches to a fixed-size (array) circular queue:
 ;;;   0. Go right ahead...Elements overwritten!!
 ;;;   1. When filled, signal error. Can't add any more...
 ;;;   2. Expand the array store. This requires realigning any "wrapped around" elements. No mechanism to ever shrink?
@@ -179,10 +184,11 @@
 
 (defmethod enqueue ((q linked-queue) obj)
   (with-slots (front rear count) q
-    (cond ((null front) ; (emptyp q)
-           (assert (null rear))
-           (setf rear (setf front (cl:list obj))))
-          (t (setf rear (setf (rest rear) (cl:list obj)))) )
+    (let ((node (cl:list obj)))
+      (cond ((emptyp q)
+             (assert (null rear))
+             (setf rear (setf front node)))
+            (t (setf rear (setf (rest rear) node)))) )
     (incf count)))
 
 (defmethod dequeue ((q linked-queue))
@@ -200,6 +206,9 @@
 ;;;
 ;;;    CIRCULAR-QUEUE
 ;;;    See ch. 6 exercise 5
+;;;    - This just obviates the need for two pointers in LINKED-QUEUE.
+;;;      INDEX points to next available CONS in which to enqueue elt. CDR
+;;;      points to front of queue.
 ;;;    
 (defclass circular-queue (queue)
   ((index :initform nil)
@@ -220,8 +229,7 @@
 (defmethod enqueue ((q circular-queue) obj)
   (with-slots (index count) q
     (let ((node (cl:list obj)))
-      (cond ((null index) (setf index node
-                                (rest index) node))
+      (cond ((null index) (setf (rest index) (setf index node)))
             (t (setf (rest node) (rest index)
                      (rest index) node
                      index node))))
@@ -308,16 +316,6 @@
 (defmethod clear ((q ring-buffer))
   (loop until (emptyp q) do (dequeue q)))
 
-;; (defmethod enqueue ((q ring-buffer) obj)
-;;   (with-slots (front rear count) q
-;;     (setf (car rear) obj)
-;;     (when (eq (cdr rear) front)
-;;       (let ((more (make-list (1+ count))))
-;;         (setf (cdr rear) more
-;;               (cdr (last more)) front)))
-;;     (setf rear (cdr rear))
-;;     (incf count)))
-
 (defmethod enqueue ((q ring-buffer) obj)
   (with-slots (front rear count) q
     (setf (car rear) obj)
@@ -377,10 +375,29 @@
 ;;;    - Invariant: Whenever queue is not empty, front list must be non-empty.
 ;;;    - Don't want client to be able to MAKE-INSTANCE of non-empty PERSISTENT-QUEUE...
 ;;;      
+;; (defclass persistent-queue (queue)
+;;   ((front :initform '() :initarg :front)
+;;    (rear :initform '() :initarg :rear)
+;; ;   (count :initform 0 :initarg :count)))
+;;    (count :type integer)))
+
+;; (defmethod initialize-instance :after ((q persistent-queue) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (front rear count) q
+;;     (setf count (+ (length front) (length rear)))) )
+
 (defclass persistent-queue (queue)
-  ((front :initform '() :initarg :front)
-   (rear :initform '() :initarg :rear)
-   (count :initform 0 :initarg :count)))
+  ((front :initform '())
+   (rear :initform '())
+   (count :initform 0 :type integer)))
+
+(defun initialize-queue (type front rear count)
+  (let ((new-queue (make-instance 'persistent-queue :type type)))
+    (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
+      (setf new-front front
+            new-rear rear
+            new-count count))
+    new-queue))
 
 (defmethod size ((q persistent-queue))
   (with-slots (count) q
@@ -389,23 +406,28 @@
 (defmethod emptyp ((q persistent-queue))
   (zerop (size q)))
 
-;; (defmethod clear ((q persistent-queue))
-;;   (with-slots (type) q
-;;     (make-instance 'persistent-queue :type type)))
 (defmethod clear ((q persistent-queue))
   (make-instance 'persistent-queue :type (type q)))
 
 (defmethod enqueue ((q persistent-queue) obj)
   (with-slots (type front rear count) q
     (if (emptyp q)
-        (make-instance 'persistent-queue :type type :front (cl:list obj) :count 1)
-        (make-instance 'persistent-queue :type type :front front :rear (cons obj rear) :count (1+ count)))) )
+        ;; (make-instance 'persistent-queue :type type :front (cl:list obj) :count 1)
+        ;; (make-instance 'persistent-queue :type type :front front :rear (cons obj rear) :count (1+ count)))) )
+        ;; (make-instance 'persistent-queue :type type :front (cl:list obj))
+        ;; (make-instance 'persistent-queue :type type :front front :rear (cons obj rear)))) )
+        (initialize-queue type (cl:list obj) '() 1)
+        (initialize-queue type front (cons obj rear) (1+ count)))) )
 
 (defmethod dequeue ((q persistent-queue))
   (with-slots (type front rear count) q
     (if (null (rest front)) ; Could check for single-elt REAR...
-        (values (make-instance 'persistent-queue :type type :front (reverse rear) :rear '() :count (1- count)) (front q))
-        (values (make-instance 'persistent-queue :type type :front (rest front) :rear rear :count (1- count)) (front q)))) )
+        ;; (values (make-instance 'persistent-queue :type type :front (reverse rear) :rear '() :count (1- count)) (front q))
+        ;; (values (make-instance 'persistent-queue :type type :front (rest front) :rear rear :count (1- count)) (front q)))) )
+        ;; (values (make-instance 'persistent-queue :type type :front (reverse rear) :rear '()) (front q))
+        ;; (values (make-instance 'persistent-queue :type type :front (rest front) :rear rear) (front q)))) )
+        (values (initialize-queue type (reverse rear) '() (1- count)) (front q))
+        (values (initialize-queue type (rest front) rear (1- count)) (front q)))) )
 
 (defmethod front ((q persistent-queue))
   (with-slots (front) q

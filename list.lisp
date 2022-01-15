@@ -1034,6 +1034,9 @@
   (setf (next previous) next
         (previous next) previous))
 
+;;;
+;;;    Full encapsulated state. Only accessible by closures.
+;;;    
 (defclass private-dcons ()
   ((content)
    (set-content)

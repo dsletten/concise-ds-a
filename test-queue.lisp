@@ -130,6 +130,17 @@
     (assert (emptyp queue)))
   t)
 
+(deftest test-array-queue ()
+  (check
+   (test-queue-constructor #'(lambda () (make-instance 'array-queue)))
+   (test-queue-emptyp #'(lambda () (make-instance 'array-queue)))
+   (test-queue-size #'(lambda () (make-instance 'array-queue)))
+   (test-queue-clear #'(lambda () (make-instance 'array-queue)))
+   (test-queue-dequeue #'(lambda () (make-instance 'array-queue)))
+   (test-queue-front #'(lambda () (make-instance 'array-queue)))
+   (test-queue-time #'(lambda () (make-instance 'array-queue)))
+   (test-queue-wave #'(lambda () (make-instance 'array-queue)))) )
+
 (deftest test-linked-queue ()
   (check
    (test-queue-constructor #'(lambda () (make-instance 'linked-queue)))
@@ -174,17 +185,6 @@
    (test-queue-time #'(lambda () (make-instance 'ring-buffer))) 
    (test-queue-wave #'(lambda () (make-instance 'ring-buffer)))) )
 
-(deftest test-array-queue ()
-  (check
-   (test-queue-constructor #'(lambda () (make-instance 'array-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'array-queue)))
-   (test-queue-size #'(lambda () (make-instance 'array-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'array-queue)))
-   (test-queue-dequeue #'(lambda () (make-instance 'array-queue)))
-   (test-queue-front #'(lambda () (make-instance 'array-queue)))
-   (test-queue-time #'(lambda () (make-instance 'array-queue)))
-   (test-queue-wave #'(lambda () (make-instance 'array-queue)))) )
-
 (deftest test-hash-table-queue ()
   (check
    (test-queue-constructor #'(lambda () (make-instance 'hash-table-queue)))
@@ -196,13 +196,25 @@
    (test-queue-time #'(lambda () (make-instance 'hash-table-queue))) 
    (test-queue-wave #'(lambda () (make-instance 'hash-table-queue)))) )
 
+(deftest test-dll-deque ()
+  (check
+   (test-queue-constructor #'make-dll-deque)
+   (test-queue-emptyp #'make-dll-deque)
+   (test-queue-size #'make-dll-deque)
+   (test-queue-clear #'make-dll-deque)
+   (test-queue-dequeue #'make-dll-deque)
+   (test-queue-front #'make-dll-deque)
+   (test-queue-time #'make-dll-deque)
+   (test-queue-wave #'make-dll-deque)))
+
 (deftest test-queue-all ()
   (check
+   (test-array-queue)
    (test-linked-queue)
    (test-circular-queue)
    (test-recycling-queue)
    (test-ring-buffer)
-   (test-array-queue)
-   (test-hash-table-queue)))
+   (test-hash-table-queue)
+   (test-dll-deque)))
 
    
