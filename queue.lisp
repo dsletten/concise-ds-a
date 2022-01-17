@@ -26,6 +26,32 @@
 ;;;;   - CIRCULAR-QUEUE, RECYCLING-QUEUE, and RING-BUFFER are just variants of LINKED-QUEUE:
 ;;;;     - CIRCULAR-QUEUE grows/shrinks with each operation.
 ;;;;     - RECYCLING-QUEUE/RING-BUFFER start pre-allocated, overwrite existing CONSes, grow as needed and never shrink.
+;;;;       - At first glance, RECYCLING-QUEUE appears to be an interesting variation. In fact, it is only trivially different from RING-BUFFER
+;;;;         and requires 3 extra SETFs for each DEQUEUE. ENQUEUE is similar for each.
+;;;;
+;;;;         Effectively, RECYCLING-QUEUE's DEQUEUE unlinks the previous `front` of the queue and links it to the end so that the
+;;;;         CONS cell is recycled.
+;;;;         Before
+;;;;         甲[*|*]--->[*|*]--->[*|*]---> ... --->[*|*]--->NIL
+;;;;            |        |        |                 |
+;;;;            v        v        v                 v
+;;;;            8        9        10               NIL
+;;;;         After
+;;;;         [*|*]--->[*|*]---> ... --->[*|*]--->甲[*|*]--->NIL
+;;;;          |        |                 |          |
+;;;;          v        v                 v          v
+;;;;          9        10               NIL        NIL
+;;;;          
+;;;;         By contrast, RING-BUFFER is a circular list, so the FRONT pointer just moves along as needed after each DEQUEUE.
+;;;;         Before
+;;;;         #1=[*|*]--->[*|*]--->[*|*]---> ... --->[*|*]--->#1#
+;;;;             |        |        |                 |
+;;;;             v        v        v                 v
+;;;;             8        9        10               NIL
+;;;;         #1=[*|*]--->[*|*]---> ... --->[*|*]--->[*|*]--->#1#
+;;;;             |        |                 |        |
+;;;;             v        v                 v        v
+;;;;             9        10               NIL      NIL
 ;;;;
 
 (in-package :containers)
@@ -374,18 +400,8 @@
 ;;;    PERSISTENT-QUEUE (Linked queue)
 ;;;    - Invariant: Whenever queue is not empty, front list must be non-empty.
 ;;;    - Don't want client to be able to MAKE-INSTANCE of non-empty PERSISTENT-QUEUE...
+;;;      - Similar issues to PERSISTENT-STACK
 ;;;      
-;; (defclass persistent-queue (queue)
-;;   ((front :initform '() :initarg :front)
-;;    (rear :initform '() :initarg :rear)
-;; ;   (count :initform 0 :initarg :count)))
-;;    (count :type integer)))
-
-;; (defmethod initialize-instance :after ((q persistent-queue) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (front rear count) q
-;;     (setf count (+ (length front) (length rear)))) )
-
 (defclass persistent-queue (queue)
   ((front :initform '())
    (rear :initform '())
@@ -412,20 +428,12 @@
 (defmethod enqueue ((q persistent-queue) obj)
   (with-slots (type front rear count) q
     (if (emptyp q)
-        ;; (make-instance 'persistent-queue :type type :front (cl:list obj) :count 1)
-        ;; (make-instance 'persistent-queue :type type :front front :rear (cons obj rear) :count (1+ count)))) )
-        ;; (make-instance 'persistent-queue :type type :front (cl:list obj))
-        ;; (make-instance 'persistent-queue :type type :front front :rear (cons obj rear)))) )
         (initialize-queue type (cl:list obj) '() 1)
         (initialize-queue type front (cons obj rear) (1+ count)))) )
 
 (defmethod dequeue ((q persistent-queue))
   (with-slots (type front rear count) q
-    (if (null (rest front)) ; Could check for single-elt REAR...
-        ;; (values (make-instance 'persistent-queue :type type :front (reverse rear) :rear '() :count (1- count)) (front q))
-        ;; (values (make-instance 'persistent-queue :type type :front (rest front) :rear rear :count (1- count)) (front q)))) )
-        ;; (values (make-instance 'persistent-queue :type type :front (reverse rear) :rear '()) (front q))
-        ;; (values (make-instance 'persistent-queue :type type :front (rest front) :rear rear) (front q)))) )
+    (if (null (rest front))
         (values (initialize-queue type (reverse rear) '() (1- count)) (front q))
         (values (initialize-queue type (rest front) rear (1- count)) (front q)))) )
 

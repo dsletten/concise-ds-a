@@ -175,22 +175,15 @@
 ;;;    PERSISTENT-STACK (Linked stack)
 ;;;    - This could be a subclass of LINKED-STACK and simply override CLEAR/PUSH/POP
 ;;;    - Don't want client to be able to MAKE-INSTANCE of non-empty PERSISTENT-STACK...
-;;;
+;;;      - In particular, can't let COUNT be inconsistent with (length top)
+;;;      - But inefficient to always calculate COUNT when PUSHing/POPping
+;;;      - Initargs removed from slots
+;;;      - Still possible to mangle an instance via WITH-SLOTS
 ;;;
 ;;;    (reduce #'(lambda (s elt) (push s elt)) '(2 4 6 8) :initial-value *ps*)
-;; (defclass persistent-stack (stack)
-;;   ((top :initform '() :initarg :top)
-;; ;   (count :initform 0 :initarg :count))) ; Should not rely on arg?? Consistent with (length top)???
-;;    (count :type integer)))
-
 (defclass persistent-stack (stack)
   ((top :initform '())
    (count :initform 0 :type integer)))
-
-;; (defmethod initialize-instance :after ((s persistent-stack) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (top count) s
-;;     (setf count (length top))))
 
 (defun initialize-stack (type top count)
   (let ((new-stack (make-instance 'persistent-stack :type type)))
@@ -212,14 +205,10 @@
 
 (defmethod push ((s persistent-stack) obj)
   (with-slots (type top count) s
-;    (make-instance 'persistent-stack :type type :top (cons obj top) :count (1+ count))))
-;    (make-instance 'persistent-stack :type type :top (cons obj top))))
     (initialize-stack type (cons obj top) (1+ count))))
 
 (defmethod pop ((s persistent-stack))
   (with-slots (type top count) s
-;    (values (make-instance 'persistent-stack :type type :top (rest top) :count (1- count)) (peek s))))
-;    (values (make-instance 'persistent-stack :type type :top (rest top)) (peek s))))
     (values (initialize-stack type (rest top) (1- count)) (peek s))))
 
 (defmethod peek ((s persistent-stack))

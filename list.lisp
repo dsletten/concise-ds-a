@@ -1603,7 +1603,26 @@
 ;;;
 ;;;    Is NODE actually part of the structure of L???
 ;;;    - If not, MODIFICATION-COUNT, COUNT, CURSOR are modified inappropriately.
-;;;    
+;;;    - In fact the whole list can be broken:
+;; * (defvar *dll* (make-doubly-linked-list))
+;; * (add *dll* 2 3 4)
+;; * (defvar *fake* (make-instance 'dcons :content 99))
+;; * (setf (next *fake*) (nth-dcons *dll* 2))
+;; * (insert-after *dll* *fake* 22)
+;; * *dll*
+;; #<DOUBLY-LINKED-LIST (2 2.5 3 4 2)>
+;; * (nth-dcons *dll* 2)
+;; #<22 ← 3 → 4>
+;; * (defvar *li* (list-iterator *dll*))
+;; * (current *li*)
+;; 2
+;; * (next *li*)
+;; 2.5
+;; * (next *li*)
+;; 3
+;; * (previous *li*)
+;; 22
+
 (defmethod insert-before ((l doubly-linked-list) node obj)
   (with-slots (store) l
     (splice-before node obj)
