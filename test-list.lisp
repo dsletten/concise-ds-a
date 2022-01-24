@@ -95,6 +95,16 @@
             "Specific test should succeed."))
   t)
 
+;; (defvar *alx* (make-array-list-x))
+;; (add *alx* 1 2 3 4 5)
+
+;; (index *alx* 3) => 2
+;; (index *alx* 3 :test #'(lambda (item elt) (zerop (mod elt item)))) => 2
+
+;; (contains *alx* 3) => 3
+;; (contains *alx* 3 :test #'(lambda (item elt) (= elt (1+ item)))) => 4
+;; (contains *alx* 2 :test #'(lambda (item elt) (> elt (* 2 item)))) => 5
+
 (defun test-list-equals (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) count))
         (array-list (fill (make-instance 'array-list) count))

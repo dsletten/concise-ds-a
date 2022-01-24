@@ -283,6 +283,7 @@
   (:documentation "Insert the object before the specified node."))
 (defmethod insert-before :around ((l linked-list) node obj)
   (cond ((not (typep obj (type l))) (error "~A is not of type ~A" obj (type l)))
+        ((emptyp l) (error "List is empty")) ; NODE can't belong to L!
         ((null node) (error "Invalid node"))
         (t (call-next-method))))
 (defmethod insert-before ((l linked-list) node obj)
@@ -293,6 +294,7 @@
   (:documentation "Insert the object after the specified node."))
 (defmethod insert-after :around ((l linked-list) node obj)
   (cond ((not (typep obj (type l))) (error "~A is not of type ~A" obj (type l)))
+        ((emptyp l) (error "List is empty")) ; NODE can't belong to L!
         ((null node) (error "Invalid node"))
         (t (call-next-method))))
 (defmethod insert-after ((l linked-list) node obj)
@@ -302,10 +304,9 @@
 (defgeneric delete-node (list doomed)
   (:documentation "Delete the specified node from the list."))
 (defmethod delete-node :around ((l linked-list) doomed)
-  (declare (ignore l))
-  (if (null doomed)
-      (error "Invalid node")
-      (call-next-method)))
+  (cond ((emptyp l) (error "List is empty")) ; DOOMED can't belong to L!
+        ((null doomed) (error "Invalid node"))
+        (t (call-next-method))))
 (defmethod delete-node ((l linked-list) doomed)
   (declare (ignore l doomed))
   (error "LINKED-LIST does not implement DELETE-NODE"))
@@ -313,10 +314,9 @@
 (defgeneric delete-child (list parent)
   (:documentation "Delete the child of the specified node from the list."))
 (defmethod delete-child :around ((l linked-list) parent)
-  (declare (ignore l))
-  (if (null parent)
-      (error "Invalid node")
-      (call-next-method)))
+  (cond ((emptyp l) (error "List is empty")) ; PARENT can't belong to L!
+        ((null parent) (error "Invalid node"))
+        (t (call-next-method))))
 (defmethod delete-child ((l linked-list) parent)
   (declare (ignore l parent))
   (error "LINKED-LIST does not implement DELETE-child"))
@@ -678,6 +678,42 @@
   (with-slots (count) l
     (decf count)))
 
+;;;
+;;;    The refactoring below (similar to DOUBLY-LINKED-LIST) looks nice, but
+;;;    it doesn't work. DELETE and DELETE-NODE are not interchangeable. In
+;;;    particular, DELETE must call EXCISE-CHILD to remove last node of list
+;;;    for SINGLY-LINKED-LIST! DELETE-NODE and (EXCISE-NODE) cannot handle the
+;;;    last node.
+;;;    
+;; (defmethod delete ((l singly-linked-list) (i integer))
+;;   (with-slots (store) l
+;;     (delete-cons l (nthcdr i store))))
+;; (defmethod delete :after ((l singly-linked-list) (i integer))
+;;   (declare (ignore i))
+;;   (with-slots (count) l
+;;     (decf count)))
+
+;; ;;;    Doesn't need :AROUND method? REMOVE has :AROUND method...
+;; ;;;    No way to confirm that NODE is actually part of list? Doesn't matter here? See DLL
+;; ;;;
+
+;; ;;;    DELETE-NODE cannot delete last node in list! (Unless node is sole element.)
+;; ;;;    - NODE is target. Copy child and route around it.
+;; ;;;    (Child is actually removed.)
+;; (defmethod delete-node ((l singly-linked-list) (doomed cons))
+;;   (delete-cons l doomed))
+;; (defmethod delete-node :after ((l singly-linked-list) (doomed cons))
+;;   (declare (ignore doomed))
+;;   (with-slots (count) l
+;;     (decf count)))
+
+;; (defun delete-cons (l doomed)
+;;   (with-slots (store) l
+;;     (cond ((eq doomed store) ; First elt
+;; 	   (prog1 (first store)
+;; 	     (setf store (rest store))))
+;; 	  (t (excise-node doomed)))) )
+  
 (defgeneric excise-node (doomed)
   (:documentation "Surgically remove the doomed node from the list."))
 (defmethod excise-node ((doomed cons))
@@ -1623,6 +1659,12 @@
 ;; * (previous *li*)
 ;; 22
 
+;;;
+;;;    Don't need to worry whether cursor is initialized for
+;;;    INSERT-BEFORE/-AFTER. List is not empty and every path
+;;;    to place an elt in the list (ADD/INSERT/(SETF NTH)) goes
+;;;    through ADD, which resets cursor if necessary.
+;;;    
 (defmethod insert-before ((l doubly-linked-list) node obj)
   (with-slots (store) l
     (splice-before node obj)
@@ -1633,7 +1675,7 @@
   (with-slots (count cursor) l
     (incf count)
     (with-slots (index) cursor
-      (incf index))))
+      (incf index)))) ; Anti-BUMP??
 
 (defmethod splice-before ((node dcons) obj)
   (let ((new-dcons (make-instance 'dcons :content obj)))
@@ -1686,10 +1728,9 @@
                  (setf store (next doomed)))) ))))
 
 (defmethod excise-node ((doomed dcons))
-    (let ((saved (next doomed)))
-      (cond ((eq doomed saved) (error "Cannot delete sole node."))
-            (t (prog1 (content doomed)
-                 (dlink (previous doomed) (next doomed)))) )))
+  (cond ((eq doomed (next doomed)) (error "Cannot delete sole node."))
+        (t (prog1 (content doomed)
+             (dlink (previous doomed) (next doomed)))) ))
 
 ;;;
 ;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST.
@@ -1856,13 +1897,18 @@
 ;;; 
 (defclass persistent-list (list)
   ((store :initform '() :initarg :store)
-;   (count :initform 0 :initarg :count))) ; Should we trust this??
-   (count))) ; No!
+   (count :initform 0 :type integer)))
 
-(defmethod initialize-instance :after ((l persistent-list) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (store count) l
-    (setf count (length store))))
+;; (defmethod initialize-instance :after ((l persistent-list) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (store count) l
+;;     (setf count (length store))))
+
+(defun initialize-list (type fill-elt store count)
+  (let ((new-list (make-instance 'persistent-list :type type :fill-elt fill-elt)))
+    (setf (slot-value new-list 'store) store
+          (slot-value new-list 'count) count)
+    new-list))
 
 (defmethod print-object ((l persistent-list) stream)
   (print-unreadable-object (l stream :type t)
@@ -1910,7 +1956,7 @@
   (null (slot-value l 'store)))
 
 (defmethod clear ((l persistent-list))
-  (make-instance 'persistent-list :type (type l) :fill-elt (fill-elt l)))
+  (make-persistent-list :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod iterator ((l persistent-list))
   (make-instance 'persistent-list-iterator :collection l))
@@ -1925,27 +1971,37 @@
 (defmethod add ((l persistent-list) &rest objs)
   (if (null objs)
       l
-      (with-slots (store) l
+      (with-slots (type fill-elt store count) l
         (loop for elt in objs
+              for i from 1
               collect elt into elts
-              finally (return (make-instance 'persistent-list 
-                                             :store (append store elts) 
-                                             :type (type l)
-                                             :fill-elt (fill-elt l)))) )))
+              finally (return (initialize-list type fill-elt (append store elts) (+ i count)))) )))
+              ;; finally (return (make-instance 'persistent-list 
+              ;;                                :store (append store elts) 
+              ;;                                :type (type l)
+              ;;                                :fill-elt (fill-elt l)))) )))
 
 ;; (defmethod insert ((l persistent-list) (i integer) obj)
 ;;   (with-slots (store) l
 ;;     (insert-before l (nthcdr i store) obj)))
 (defmethod insert ((l persistent-list) (i integer) obj)
-  (with-slots (store) l
-    (make-instance 'persistent-list
-                   :store (loop for elt in store
-                                for cons on store
-                                repeat i ; This has to be here!
-                                collect elt into elts
-                                finally (return (nconc elts (cons obj cons))))
-                   :type (type l)
-                   :fill-elt (fill-elt l))))
+  (with-slots (type fill-elt store count) l
+    ;; (make-instance 'persistent-list
+    ;;                :store (loop for elt in store
+    ;;                             for cons on store
+    ;;                             repeat i ; This has to be here!
+    ;;                             collect elt into elts
+    ;;                             finally (return (nconc elts (cons obj cons))))
+    ;;                :type (type l)
+    ;;                :fill-elt (fill-elt l))))
+    (initialize-list type
+                     fill-elt
+                     (loop for elt in store
+                           for cons on store
+                           repeat i ; This has to be here!
+                           collect elt into elts
+                           finally (return (nconc elts (cons obj cons))))
+                     (1+ count))))
 
 ;; (defmethod insert-before ((l persistent-list) (node cons) obj)
 ;;   (with-slots (store) l
@@ -1988,7 +2044,7 @@
 ;;   (with-slots (store) l
 ;;     (delete-node l (nthcdr i store))))
 (defmethod delete ((l persistent-list) (i integer))
-  (with-slots (store) l
+  (with-slots (type fill-elt store count) l
     (multiple-value-bind (new-store doomed)
         (loop for elt in store
               ;; for tail on (rest store)
@@ -1999,11 +2055,11 @@
               repeat i ; This must be here.
               collect elt into elts
               finally (return (values (nconc elts (rest tail)) elt)))
-      (values (make-instance 'persistent-list
-                             :store new-store
-                             :type (type l)
-                             :fill-elt (fill-elt l))
-              doomed))))
+      ;; (values (make-instance 'persistent-list
+      ;;                        :store new-store
+      ;;                        :type (type l)
+      ;;                        :fill-elt (fill-elt l))
+      (values (initialize-list type fill-elt new-store (1- count)) doomed))))
 
 ;;;
 ;;;    Need to test DELETE-NODE/DELETE-CHILD directly.
@@ -2046,34 +2102,43 @@
 ;;;    Simply used for value...
 ;;;    
 (defmethod (setf nth) (obj (l persistent-list) (i integer))
-  (with-slots (store) l
+  (with-slots (type fill-elt store count) l
     (if (zerop i) ; Why 2 cases?! Can't get LOOP to work for both...
-        (make-instance 'persistent-list
-                       :store (cons obj (rest store))
-                       :type (type l)
-                       :fill-elt (fill-elt l))
-        (make-instance 'persistent-list
-                       :store (loop repeat i
-                                    for elt in store
-                                    for tail on (rest store)
-                                    collect elt into elts
-                                    finally (return (nconc elts (cons obj (rest tail)))) )
-                       :type (type l)
-                       :fill-elt (fill-elt l)))) )
+        ;; (make-instance 'persistent-list
+        ;;                :store (cons obj (rest store))
+        ;;                :type (type l)
+        ;;                :fill-elt (fill-elt l))
+        ;; (make-instance 'persistent-list
+        ;;                :store (loop repeat i
+        ;;                             for elt in store
+        ;;                             for tail on (rest store)
+        ;;                             collect elt into elts
+        ;;                             finally (return (nconc elts (cons obj (rest tail)))) )
+        ;;                :type (type l)
+        ;;                :fill-elt (fill-elt l)))) )
+        (initialize-list type fill-elt (cons obj (rest store)) count)
+        (initialize-list type
+                         fill-elt
+                         (loop repeat i
+                               for elt in store
+                               for tail on (rest store)
+                               collect elt into elts
+                               finally (return (nconc elts (cons obj (rest tail)))) )
+                         count))))
 
 (defmethod index ((l persistent-list) obj &key (test #'eql))
   (with-slots (store) l
     (position obj store :test test)))
 
 (defmethod slice ((l persistent-list) (i integer) (n integer))
-  (with-slots (store count) l
+  (with-slots (type fill-elt store count) l
     (let* ((start (min i count))
            (end (min (+ i n) count)))
-      (make-instance 'persistent-list
-                     :store (subseq store start end)
-                     :type (type l)
-                     :fill-elt (fill-elt l)))) )
-
+      ;; (make-instance 'persistent-list
+      ;;                :store (subseq store start end)
+      ;;                :type (type l)
+      ;;                :fill-elt (fill-elt l)))) )
+      (initialize-list type fill-elt (subseq store start end) (- end start)))) )
 ;;;
 ;;;    Don't need to hold onto LIST after initialization?
 ;;;    CURSOR added to avoid manipulating LIST directly...
