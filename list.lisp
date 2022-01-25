@@ -135,8 +135,7 @@
   (:documentation "Add the objects to the end of the list."))
 (defmethod add :around ((l list) &rest objs)
   (if (every #'(lambda (obj) (typep obj (type l))) objs)
-      (unless (null objs)
-	(call-next-method))
+      (call-next-method)
       (error "Type mismatch with OBJS")))
 (defmethod add ((l list) &rest objs)
   (declare (ignore l objs))
@@ -253,6 +252,10 @@
 (defmethod clear :after ((l mutable-list))
   (count-modification l))           
 
+(defmethod add :around ((l mutable-list) &rest objs)
+  (declare (ignore l))
+  (unless (null objs)
+    (call-next-method)))
 (defmethod add :after ((l mutable-list) &rest objs)
   (declare (ignore objs))
   (count-modification l))
@@ -1596,45 +1599,66 @@
 ;;;    Functions that call NTH-DCONS may accept a negative index. Such
 ;;;    an index must be offset before calling NTH-DCONS.
 ;;;
-(defun nth-dcons (list i)
-  (declare (integer i))
-  (with-slots (store count cursor) list
-    (declare (integer count))
+(flet ((nth-dcons (list i)
+         (declare (integer i))
+         (with-slots (store count cursor) list
+           (declare (integer count))
 ;    (assert (typep i `(integer 0 (,count))) () "Invalid index: ~D" i)
-    (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
-    (cond ((emptyp list) (error "List is empty"))
-          (t (with-slots (index node) cursor
-               (declare (integer index))
-               (cond ((zerop i) store)
-                     ((= i index) node)
-                     ((< i (/ index 2))
-                      (reset cursor)
-                      (advance cursor i)
-                      node)
-                     ((< i index)
-                      (rewind cursor (- index i))
-                      node)
-                     ((<= i (/ (+ count index) 2))
-                      (advance cursor (- i index))
-                      node)
-                     (t (reset cursor)
-                        (rewind cursor (- count i))
-                        node)))) )))
-
-(defmethod insert ((l doubly-linked-list) (i integer) obj)
-  (with-slots (store) l
-    (splice-before (nth-dcons l i) obj)
-    (when (zerop i)
-      (setf store (previous store)))) )
-(defmethod insert :after ((l doubly-linked-list) (i integer) obj)
-  (declare (ignore obj))
-  (with-slots (count cursor) l
-    (incf count)
-    (with-slots (index) cursor
-      (when (or (not (initializedp cursor))
-                (<= 0 i index)
-                (and (minusp i) (<= 0 (+ i count) index)))
-        (reset cursor)))) )
+           (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
+           (cond ((emptyp list) (error "List is empty"))
+                 (t (with-slots (index node) cursor
+                      (declare (integer index))
+                      (cond ((zerop i) store)
+                            ((= i index) node)
+                            ((< i (/ index 2))
+                             (reset cursor)
+                             (advance cursor i)
+                             node)
+                            ((< i index)
+                             (rewind cursor (- index i))
+                             node)
+                            ((<= i (/ (+ count index) 2))
+                             (advance cursor (- i index))
+                             node)
+                            (t (reset cursor)
+                               (rewind cursor (- count i))
+                               node)))) ))))
+  (defmethod insert ((l doubly-linked-list) (i integer) obj)
+    (with-slots (store) l
+      (splice-before (nth-dcons l i) obj)
+      (when (zerop i)
+        (setf store (previous store)))) )
+  (defmethod insert :after ((l doubly-linked-list) (i integer) obj)
+             (declare (ignore obj))
+             (with-slots (count cursor) l
+               (incf count)
+               (with-slots (index) cursor
+                 (when (or (not (initializedp cursor))
+                           (<= 0 i index)
+                           (and (minusp i) (<= 0 (+ i count) index)))
+                   (reset cursor)))) )
+  (defmethod delete ((l doubly-linked-list) (i integer))
+    (delete-dcons l (nth-dcons l i)))
+  (defmethod delete :after ((l doubly-linked-list) (i integer))
+    (declare (ignore i))
+    (with-slots (count cursor) l
+      (decf count)
+      (reset cursor)))
+  (defmethod nth ((l doubly-linked-list) (i integer))
+    (with-slots (store count) l
+      (content (nth-dcons l i))))
+  (defmethod (setf nth) (obj (l doubly-linked-list) (i integer))
+    (with-slots (store) l
+      (setf (content (nth-dcons l i)) obj)))
+  (defmethod slice ((l doubly-linked-list) (i integer) (n integer))
+    (labels ((dsubseq (start end)
+               (loop for i from start below end
+                     for dcons = (nth-dcons l start) then (next dcons)
+                     collect (content dcons))))
+      (with-slots (count) l
+        (let ((dll (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l))))
+          (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))
+          dll)))) )
 
 ;;;
 ;;;    Is NODE actually part of the structure of L???
@@ -1695,13 +1719,6 @@
     (dlink new-dcons (next node)) ; Do this in the right order!!
     (dlink node new-dcons)))
 
-(defmethod delete ((l doubly-linked-list) (i integer))
-  (delete-dcons l (nth-dcons l i)))
-(defmethod delete :after ((l doubly-linked-list) (i integer))
-  (declare (ignore i))
-  (with-slots (count cursor) l
-    (decf count)
-    (reset cursor)))
 ;;;
 ;;;    Confirm that DOOMED is actually a node in this list!
 ;;;    - Smuggling in some fabricated DCONS could snip out multiple nodes depending
@@ -1754,14 +1771,6 @@
         (prog1 (content child)
           (dlink parent (next child)))) ))
 
-(defmethod nth ((l doubly-linked-list) (i integer))
-  (with-slots (store count) l
-    (content (nth-dcons l i))))
-
-(defmethod (setf nth) (obj (l doubly-linked-list) (i integer))
-  (with-slots (store) l
-    (setf (content (nth-dcons l i)) obj)))
-
 (defmethod index ((l doubly-linked-list) obj &key (test #'eql))
   (with-slots (store count) l
     (labels ((find-obj (dcons i)
@@ -1775,16 +1784,6 @@
 ;;     (dotimes (i count nil)
 ;;       (when (funcall test obj (nth l i)) ; Reasonable due to cursor! Actually no...
 ;;         (return i)))) )
-
-(defmethod slice ((l doubly-linked-list) (i integer) (n integer))
-  (labels ((dsubseq (start end)
-             (loop for i from start below end
-                   for dcons = (nth-dcons l start) then (next dcons)
-                   collect (content dcons))))
-    (with-slots (count) l
-      (let ((dll (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l))))
-        (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))
-        dll))))
 
 (defclass doubly-linked-list-iterator (mutable-collection-iterator)
   ((cursor)
@@ -1904,12 +1903,6 @@
 ;;   (with-slots (store count) l
 ;;     (setf count (length store))))
 
-(defun initialize-list (type fill-elt store count)
-  (let ((new-list (make-instance 'persistent-list :type type :fill-elt fill-elt)))
-    (setf (slot-value new-list 'store) store
-          (slot-value new-list 'count) count)
-    new-list))
-
 (defmethod print-object ((l persistent-list) stream)
   (print-unreadable-object (l stream :type t)
     (format stream "(")
@@ -1968,177 +1961,76 @@
   (with-slots (store) l
     (find obj store :test test)))
 
-(defmethod add ((l persistent-list) &rest objs)
-  (if (null objs)
-      l
-      (with-slots (type fill-elt store count) l
-        (loop for elt in objs
-              for i from 1
-              collect elt into elts
-              finally (return (initialize-list type fill-elt (append store elts) (+ i count)))) )))
-              ;; finally (return (make-instance 'persistent-list 
-              ;;                                :store (append store elts) 
-              ;;                                :type (type l)
-              ;;                                :fill-elt (fill-elt l)))) )))
-
-;; (defmethod insert ((l persistent-list) (i integer) obj)
-;;   (with-slots (store) l
-;;     (insert-before l (nthcdr i store) obj)))
-(defmethod insert ((l persistent-list) (i integer) obj)
-  (with-slots (type fill-elt store count) l
-    ;; (make-instance 'persistent-list
-    ;;                :store (loop for elt in store
-    ;;                             for cons on store
-    ;;                             repeat i ; This has to be here!
-    ;;                             collect elt into elts
-    ;;                             finally (return (nconc elts (cons obj cons))))
-    ;;                :type (type l)
-    ;;                :fill-elt (fill-elt l))))
-    (initialize-list type
-                     fill-elt
-                     (loop for elt in store
-                           for cons on store
-                           repeat i ; This has to be here!
-                           collect elt into elts
-                           finally (return (nconc elts (cons obj cons))))
-                     (1+ count))))
-
-;; (defmethod insert-before ((l persistent-list) (node cons) obj)
-;;   (with-slots (store) l
-;;     (let ((new-store (loop for elt in store
-;;                            for cons on store
-;;                            until (eq node cons)
-;;                            collect elt into elts
-;;                            finally (return (if (eq node cons)
-;;                                                (nconc elts (cons obj cons))
-;;                                                store)))) )
-;;       (if (eq new-store store)
-;;           l
-;;           (make-instance 'persistent-list
-;;                          :store new-store
-;;                          :type (type l)
-;;                          :fill-elt (fill-elt l)))) ))
-
-;; (defmethod insert-after ((l persistent-list) (node cons) obj)
-;;   (with-slots (store) l
-;;     (let ((new-store (loop for elt in store
-;;                            for cons on store
-;;                            until (eq node cons)
-;;                            collect elt into elts
-;;                            finally (return (if (eq node cons)
-;;                                                (nconc elts (cons elt (cons obj (rest cons))))
-;;                                                store)))) )
-;;       (if (eq new-store store)
-;;           l
-;;           (make-instance 'persistent-list
-;;                          :store new-store
-;;                          :type (type l)
-;;                          :fill-elt (fill-elt l)))) ))
-
-(defmethod delete :around ((l persistent-list) (i integer))
-  (cond ((emptyp l) (error "List is empty")) ; ??????
-        ((>= i (size l)) l)
-        ((< i (- (size l))) l)
-        (t (call-next-method))))
-;; (defmethod delete ((l persistent-list) (i integer))
-;;   (with-slots (store) l
-;;     (delete-node l (nthcdr i store))))
-(defmethod delete ((l persistent-list) (i integer))
-  (with-slots (type fill-elt store count) l
-    (multiple-value-bind (new-store doomed)
-        (loop for elt in store
-              ;; for tail on (rest store)
-              ;; repeat i ; This has to be here!
-              ;; collect elt into elts
-              ;; finally (return (values (nconc elts tail) elt)))
-              for tail on store
-              repeat i ; This must be here.
-              collect elt into elts
-              finally (return (values (nconc elts (rest tail)) elt)))
-      ;; (values (make-instance 'persistent-list
-      ;;                        :store new-store
-      ;;                        :type (type l)
-      ;;                        :fill-elt (fill-elt l))
-      (values (initialize-list type fill-elt new-store (1- count)) doomed))))
-
 ;;;
-;;;    Need to test DELETE-NODE/DELETE-CHILD directly.
-;;;    - Only used by list iterator. Only 1 branch of each called?
-;;;
-;;;    This method _can_ remove last node (unlike mutable list) since list is being rebuilt.
+;;;    INITIALIZE-LIST is completely private now!
 ;;;    
-;; (defmethod delete-node ((l persistent-list) (doomed cons))
-;;   (with-slots (store) l
-;;     (let ((new-store (loop for elt in store
-;;                            for tail on store
-;;                            until (eq tail doomed)
-;;                            collect elt into elts
-;;                            finally (return (if (eq tail doomed)
-;;                                                (nconc elts (rest tail))
-;;                                                store)))) )
-;;       (if (eq new-store store)
-;;           (values l nil)
-;;           (values (make-instance 'persistent-list
-;;                                  :store new-store
-;;                                  :type (type l)
-;;                                  :fill-elt (fill-elt l))
-;;                   (first doomed)))) ))
-
-;; ;;;
-;; ;;;    Not really needed.
-;; ;;;    
-;; (defmethod delete-child ((l persistent-list) (parent cons))
-;;   (let ((child (rest parent)))
-;;     (if (null child)
-;;         (error "Parent must have child node")
-;;         (delete-node l child))))
-
-(defmethod nth ((l persistent-list) (i integer))
-  (with-slots (store) l
-    (cl:nth i store)))
-
+(flet ((initialize-list (type fill-elt store count)
+         (let ((new-list (make-instance 'persistent-list :type type :fill-elt fill-elt)))
+           (setf (slot-value new-list 'store) store
+                 (slot-value new-list 'count) count)
+           new-list)))
+  (defmethod add ((l persistent-list) &rest objs)
+    (if (null objs)
+        l
+        (with-slots (type fill-elt store count) l
+          (loop for elt in objs
+                for i from 1
+                collect elt into elts
+                finally (return (initialize-list type fill-elt (append store elts) (+ i count)))) )))
+  (defmethod insert ((l persistent-list) (i integer) obj)
+    (with-slots (type fill-elt store count) l
+      (initialize-list type
+                       fill-elt
+                       (loop for elt in store
+                             for cons on store
+                             repeat i ; This has to be here!
+                             collect elt into elts
+                             finally (return (nconc elts (cons obj cons))))
+                       (1+ count))))
+  (defmethod delete :around ((l persistent-list) (i integer))
+    (cond ((emptyp l) (error "List is empty")) ; ??????
+          ((>= i (size l)) l)
+          ((< i (- (size l))) l)
+          (t (call-next-method))))
+  (defmethod delete ((l persistent-list) (i integer))
+    (with-slots (type fill-elt store count) l
+      (multiple-value-bind (new-store doomed)
+          (loop for elt in store
+                for tail on store
+                repeat i ; This must be here.
+                collect elt into elts
+                finally (return (values (nconc elts (rest tail)) elt)))
+        (values (initialize-list type fill-elt new-store (1- count)) doomed))))
 ;;;
 ;;;    SETF method need not actually set anything???
 ;;;    Simply used for value...
 ;;;    
-(defmethod (setf nth) (obj (l persistent-list) (i integer))
-  (with-slots (type fill-elt store count) l
-    (if (zerop i) ; Why 2 cases?! Can't get LOOP to work for both...
-        ;; (make-instance 'persistent-list
-        ;;                :store (cons obj (rest store))
-        ;;                :type (type l)
-        ;;                :fill-elt (fill-elt l))
-        ;; (make-instance 'persistent-list
-        ;;                :store (loop repeat i
-        ;;                             for elt in store
-        ;;                             for tail on (rest store)
-        ;;                             collect elt into elts
-        ;;                             finally (return (nconc elts (cons obj (rest tail)))) )
-        ;;                :type (type l)
-        ;;                :fill-elt (fill-elt l)))) )
-        (initialize-list type fill-elt (cons obj (rest store)) count)
-        (initialize-list type
-                         fill-elt
-                         (loop repeat i
-                               for elt in store
-                               for tail on (rest store)
-                               collect elt into elts
-                               finally (return (nconc elts (cons obj (rest tail)))) )
-                         count))))
+  (defmethod (setf nth) (obj (l persistent-list) (i integer))
+    (with-slots (type fill-elt store count) l
+      (if (zerop i) ; Why 2 cases?! Can't get LOOP to work for both...
+          (initialize-list type fill-elt (cons obj (rest store)) count)
+          (initialize-list type
+                           fill-elt
+                           (loop repeat i
+                                 for elt in store
+                                 for tail on (rest store)
+                                 collect elt into elts
+                                 finally (return (nconc elts (cons obj (rest tail)))) )
+                           count))))
+  (defmethod slice ((l persistent-list) (i integer) (n integer))
+    (with-slots (type fill-elt store count) l
+      (let* ((start (min i count))
+             (end (min (+ i n) count)))
+        (initialize-list type fill-elt (subseq store start end) (- end start)))) ))
+  
+(defmethod nth ((l persistent-list) (i integer))
+  (with-slots (store) l
+    (cl:nth i store)))
 
 (defmethod index ((l persistent-list) obj &key (test #'eql))
   (with-slots (store) l
     (position obj store :test test)))
 
-(defmethod slice ((l persistent-list) (i integer) (n integer))
-  (with-slots (type fill-elt store count) l
-    (let* ((start (min i count))
-           (end (min (+ i n) count)))
-      ;; (make-instance 'persistent-list
-      ;;                :store (subseq store start end)
-      ;;                :type (type l)
-      ;;                :fill-elt (fill-elt l)))) )
-      (initialize-list type fill-elt (subseq store start end) (- end start)))) )
 ;;;
 ;;;    Don't need to hold onto LIST after initialization?
 ;;;    CURSOR added to avoid manipulating LIST directly...
