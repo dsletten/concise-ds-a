@@ -185,12 +185,18 @@
   ((top :initform '())
    (count :initform 0 :type integer)))
 
-(defun initialize-stack (type top count)
-  (let ((new-stack (make-instance 'persistent-stack :type type)))
-    (with-slots ((new-top top) (new-count count)) new-stack
-      (setf new-top top
-            new-count count))
-    new-stack))
+(flet ((initialize-stack (type top count)
+         (let ((new-stack (make-instance 'persistent-stack :type type)))
+           (with-slots ((new-top top) (new-count count)) new-stack
+             (setf new-top top
+                   new-count count))
+           new-stack)))
+  (defmethod push ((s persistent-stack) obj)
+    (with-slots (type top count) s
+      (initialize-stack type (cons obj top) (1+ count))))
+  (defmethod pop ((s persistent-stack))
+    (with-slots (type top count) s
+      (values (initialize-stack type (rest top) (1- count)) (peek s)))) )
 
 (defmethod size ((s persistent-stack))
   (with-slots (count) s
@@ -202,14 +208,6 @@
 
 (defmethod clear ((s persistent-stack))
   (make-instance 'persistent-stack :type (type s)))
-
-(defmethod push ((s persistent-stack) obj)
-  (with-slots (type top count) s
-    (initialize-stack type (cons obj top) (1+ count))))
-
-(defmethod pop ((s persistent-stack))
-  (with-slots (type top count) s
-    (values (initialize-stack type (rest top) (1- count)) (peek s))))
 
 (defmethod peek ((s persistent-stack))
   (with-slots (top) s

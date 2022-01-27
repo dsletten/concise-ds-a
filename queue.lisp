@@ -407,13 +407,23 @@
    (rear :initform '())
    (count :initform 0 :type integer)))
 
-(defun initialize-queue (type front rear count)
-  (let ((new-queue (make-instance 'persistent-queue :type type)))
-    (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
-      (setf new-front front
-            new-rear rear
-            new-count count))
-    new-queue))
+(flet ((initialize-queue (type front rear count)
+         (let ((new-queue (make-instance 'persistent-queue :type type)))
+           (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
+             (setf new-front front
+                   new-rear rear
+                   new-count count))
+           new-queue)))
+  (defmethod enqueue ((q persistent-queue) obj)
+    (with-slots (type front rear count) q
+      (if (emptyp q)
+          (initialize-queue type (cl:list obj) '() 1)
+          (initialize-queue type front (cons obj rear) (1+ count)))) )
+  (defmethod dequeue ((q persistent-queue))
+    (with-slots (type front rear count) q
+      (if (null (rest front))
+          (values (initialize-queue type (reverse rear) '() (1- count)) (front q))
+          (values (initialize-queue type (rest front) rear (1- count)) (front q)))) ))
 
 (defmethod size ((q persistent-queue))
   (with-slots (count) q
@@ -424,18 +434,6 @@
 
 (defmethod clear ((q persistent-queue))
   (make-instance 'persistent-queue :type (type q)))
-
-(defmethod enqueue ((q persistent-queue) obj)
-  (with-slots (type front rear count) q
-    (if (emptyp q)
-        (initialize-queue type (cl:list obj) '() 1)
-        (initialize-queue type front (cons obj rear) (1+ count)))) )
-
-(defmethod dequeue ((q persistent-queue))
-  (with-slots (type front rear count) q
-    (if (null (rest front))
-        (values (initialize-queue type (reverse rear) '() (1- count)) (front q))
-        (values (initialize-queue type (rest front) rear (1- count)) (front q)))) )
 
 (defmethod front ((q persistent-queue))
   (with-slots (front) q

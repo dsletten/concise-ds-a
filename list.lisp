@@ -1982,11 +1982,12 @@
       (initialize-list type
                        fill-elt
                        (loop for elt in store
-                             for cons on store
+                             for tail on store
                              repeat i ; This has to be here!
                              collect elt into elts
-                             finally (return (nconc elts (cons obj cons))))
+                             finally (return (nconc elts (cons obj tail))))
                        (1+ count))))
+      ;; (initialize-list type fill-elt (nconc (subseq store 0 i) (cons obj (nthcdr i store))) (1+ count))))
   (defmethod delete :around ((l persistent-list) (i integer))
     (cond ((emptyp l) (error "List is empty")) ; ??????
           ((>= i (size l)) l)
