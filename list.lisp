@@ -52,6 +52,7 @@
 ;;;;    Examine ARRAY-LIST-X DELETE tweaks.
 ;;;;    Fix SINGLY-LINKED-LIST iterator/list-iterator STORE vs. FRONT!!!
 ;;;;    Refactor ERROR messages...
+;;;;    - Other API methods: APPEND, REVERSE, ...
 ;;;;    
 (in-package :containers)
 
@@ -149,6 +150,10 @@
 ;;;
 ;;;    INSERT multiples like ADD?
 ;;;    Negative index only makes sense for non-empty list.
+;;;    - Fox is not clear what is supposed to happen if negative index is
+;;;      beyond start of list. The obvious choice is to not insert anything.
+;;;      The less obvious choice involves PERSISTENT-LISTs. What should be returned?
+;;;      I am modelling INSERT after DELETE, which simply returns the list "as is".
 ;;;    
 (defgeneric insert (list i obj)
   (:documentation "Insert the object at the given index. List is extended as necessary."))

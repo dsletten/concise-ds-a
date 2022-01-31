@@ -25,11 +25,15 @@
 ;;;;   Limitations of typed containers:
 ;;;;   Java
 ;;;;   Stack<Stack<Integer>> (Hard in Lisp?)
+;;;;   
 ;;;;   Lisp
 ;;;;   (make-instance 'linked-stack :type '(satisfies evenp))
 ;;;;   (make-instance 'linked-stack :type '(float -1.0 1.0))
 ;;;;   (make-instance 'linked-stack :type '(satisfies alpha-char-p))
 ;;;;
+;;;;   TODO:
+;;;;    - Other methods: ELEMENTS
+;;;;    
 (defpackage :containers 
   (:use :common-lisp)
   (:export :container :type :size :emptyp :clear
