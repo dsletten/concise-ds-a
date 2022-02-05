@@ -33,7 +33,7 @@
 ;;;;
 ;;;;   TODO:
 ;;;;    - Other methods: ELEMENTS
-;;;;    
+;;;;    - DISCHARGE method - CLEAR + return elts
 (defpackage :containers 
   (:use :common-lisp)
   (:export :container :type :size :emptyp :clear

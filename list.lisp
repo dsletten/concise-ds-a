@@ -129,7 +129,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Structural modification;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;;    See semantics of https://docs.oracle.com/en/java/javase/12/docs/api/java.base/java/util/Collection.html#add(E)
-;;;    Regarding return value.
+;;;    Regarding return value. --Optionally return the list itself??
 ;;;    - Should be part of COLLECTION interface?
 ;;;    
 (defgeneric add (list &rest objs)
@@ -1973,7 +1973,20 @@
          (let ((new-list (make-instance 'persistent-list :type type :fill-elt fill-elt)))
            (setf (slot-value new-list 'store) store
                  (slot-value new-list 'count) count)
-           new-list)))
+           new-list))
+       (adjust-node (store i adjustment) ; Creates ad hoc queue
+         (do ((front nil)
+              (rear nil)
+              (node store (rest node))
+              (j 0 (1+ j)))
+             ((>= j i) (let ((tail (funcall adjustment node)))
+                         (if (null front)
+                             (setf front tail)
+                             (setf (rest rear) tail))
+                         (values front node)))
+           (let ((copy (cons (first node) nil)))
+             (cond ((null front) (setf rear (setf front copy)))
+                   (t (setf rear (setf (rest rear) copy)))) ))))
   (defmethod add ((l persistent-list) &rest objs)
     (if (null objs)
         l
@@ -1984,14 +1997,15 @@
                 finally (return (initialize-list type fill-elt (append store elts) (+ i count)))) )))
   (defmethod insert ((l persistent-list) (i integer) obj)
     (with-slots (type fill-elt store count) l
-      (initialize-list type
-                       fill-elt
-                       (loop for elt in store
-                             for tail on store
-                             repeat i ; This has to be here!
-                             collect elt into elts
-                             finally (return (nconc elts (cons obj tail))))
-                       (1+ count))))
+      ;; (initialize-list type
+      ;;                  fill-elt
+      ;;                  (loop for elt in store
+      ;;                        for tail on store
+      ;;                        repeat i ; This has to be here!
+      ;;                        collect elt into elts
+      ;;                        finally (return (nconc elts (cons obj tail))))
+      ;;                  (1+ count))))
+      (initialize-list type fill-elt (adjust-node store i #'(lambda (node) (cons obj node))) (1+ count))))
       ;; (initialize-list type fill-elt (nconc (subseq store 0 i) (cons obj (nthcdr i store))) (1+ count))))
   (defmethod delete :around ((l persistent-list) (i integer))
     (cond ((emptyp l) (error "List is empty")) ; ??????
@@ -2001,28 +2015,34 @@
   (defmethod delete ((l persistent-list) (i integer))
     (with-slots (type fill-elt store count) l
       (multiple-value-bind (new-store doomed)
-          (loop for elt in store
-                for tail on store
-                repeat i ; This must be here.
-                collect elt into elts
-                finally (return (values (nconc elts (rest tail)) elt)))
-        (values (initialize-list type fill-elt new-store (1- count)) doomed))))
+          ;; (loop for elt in store
+          ;;       for tail on store
+          ;;       repeat i ; This must be here.
+          ;;       collect elt into elts
+          ;;       finally (return (values (nconc elts (rest tail)) elt)))
+          (adjust-node store i #'(lambda (node) (rest node)))
+        (values (initialize-list type fill-elt new-store (1- count)) (first doomed)))) )
 ;;;
 ;;;    SETF method need not actually set anything???
 ;;;    Simply used for value...
 ;;;    
   (defmethod (setf nth) (obj (l persistent-list) (i integer))
     (with-slots (type fill-elt store count) l
-      (if (zerop i) ; Why 2 cases?! Can't get LOOP to work for both...
-          (initialize-list type fill-elt (cons obj (rest store)) count)
-          (initialize-list type
-                           fill-elt
-                           (loop repeat i
-                                 for elt in store
-                                 for tail on (rest store)
-                                 collect elt into elts
-                                 finally (return (nconc elts (cons obj (rest tail)))) )
-                           count))))
+      ;; (if (zerop i) ; Why 2 cases?! Can't get LOOP to work for both...
+      ;;     (initialize-list type fill-elt (cons obj (rest store)) count)
+      ;;     (initialize-list type
+      ;;                      fill-elt
+      ;;                      (loop repeat i
+      ;;                            for elt in store
+      ;;                            for tail on (rest store)
+      ;;                            collect elt into elts
+      ;;                            finally (return (nconc elts (cons obj (rest tail)))) )
+      ;;                      count))))
+      (initialize-list type fill-elt (adjust-node store i #'(lambda (node) (cons obj (rest node)))) count)))
+  ;;
+  ;;    Why doesn't this use ADD as the other SLICE methods do?
+  ;;    Simply for performance? Avoids creating a lot of garbage...
+  ;;    
   (defmethod slice ((l persistent-list) (i integer) (n integer))
     (with-slots (type fill-elt store count) l
       (let* ((start (min i count))
