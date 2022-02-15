@@ -34,8 +34,10 @@
 ;;;;   TODO:
 ;;;;    - Other methods: ELEMENTS
 ;;;;    - DISCHARGE method - CLEAR + return elts
+(load "/home/slytobias/lisp/packages/lang.lisp")
+
 (defpackage :containers 
-  (:use :common-lisp)
+  (:use :common-lisp :lang)
   (:export :container :type :size :emptyp :clear
            :dispenser
            :stack :push :pop :peek
