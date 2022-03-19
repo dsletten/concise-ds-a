@@ -237,6 +237,32 @@
 
 ))
 
+(deftest test-hash-table-list-x-list-iterator ()
+  (check
+   (test-list-iterator-vs-iterator #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-forward-traversal #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-backward-traversal #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-remove-forward #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-remove-backward #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-remove-inside-out #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-add-before-empty #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-add-after-empty #'(lambda () (make-instance 'hash-table-list-x)))
+
+))
+
+(deftest test-hash-table-list-z-list-iterator ()
+  (check
+   (test-list-iterator-vs-iterator #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-forward-traversal #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-backward-traversal #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-remove-forward #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-remove-backward #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-remove-inside-out #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-add-before-empty #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-add-after-empty #'(lambda () (make-instance 'hash-table-list-z)))
+
+))
+
 (deftest test-list-iterator-all ()
   (check
    (test-array-list-list-iterator)
@@ -244,4 +270,7 @@
    (test-singly-linked-list-list-iterator)
    (test-singly-linked-list-x-list-iterator)
    (test-doubly-linked-list-list-iterator)
-   (test-hash-table-list-list-iterator)))
+   (test-hash-table-list-list-iterator)
+   (test-hash-table-list-x-list-iterator)
+   (test-hash-table-list-z-list-iterator)))
+

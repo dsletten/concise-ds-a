@@ -98,6 +98,25 @@
     (assert (emptyp queue) () "Queue should be empty."))
   t)
 
+(defun test-deque-dequeue* (deque-constructor &optional (count 1000))
+  (let ((deque (fill (funcall deque-constructor) count)))
+    (loop for i from count downto 1
+          for dequeued = (dequeue* deque)
+          unless (= i dequeued)
+          do (error "Wrong value on deque: ~A should be: ~A~%" dequeued i))
+    (assert (emptyp deque) () "Deque should be empty."))
+  t)
+
+(defun test-deque-rear (deque-constructor &optional (count 1000))
+  (let ((deque (fill (funcall deque-constructor) count)))
+    (loop for i from count downto 1
+          for rear = (rear deque)
+          unless (= i rear)
+          do (error "Wrong value on deque: ~A should be: ~A~%" rear i)
+          do (dequeue* deque))
+    (assert (emptyp deque) () "Deque should be empty."))
+  t)
+
 (defun test-queue-time (queue-constructor)
   (let ((queue (funcall queue-constructor)))
     (time
@@ -204,8 +223,23 @@
    (test-queue-clear #'make-dll-deque)
    (test-queue-dequeue #'make-dll-deque)
    (test-queue-front #'make-dll-deque)
+   (test-deque-dequeue* #'make-dll-deque)
+   (test-deque-rear #'make-dll-deque)
    (test-queue-time #'make-dll-deque)
    (test-queue-wave #'make-dll-deque)))
+
+(deftest test-hash-table-deque ()
+  (check
+   (test-queue-constructor #'make-hash-table-deque)
+   (test-queue-emptyp #'make-hash-table-deque)
+   (test-queue-size #'make-hash-table-deque)
+   (test-queue-clear #'make-hash-table-deque)
+   (test-queue-dequeue #'make-hash-table-deque)
+   (test-queue-front #'make-hash-table-deque)
+   (test-deque-dequeue* #'make-hash-table-deque)
+   (test-deque-rear #'make-hash-table-deque)
+   (test-queue-time #'make-hash-table-deque)
+   (test-queue-wave #'make-hash-table-deque)))
 
 (deftest test-queue-all ()
   (check
@@ -215,6 +249,5 @@
    (test-recycling-queue)
    (test-ring-buffer)
    (test-hash-table-queue)
-   (test-dll-deque)))
-
-   
+   (test-dll-deque)
+   (test-hash-table-deque)))

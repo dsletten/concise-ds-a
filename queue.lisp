@@ -63,16 +63,14 @@
   ()
   (:documentation "A queue is a dispenser holding a sequence of elements that allows insertions only at one end (the rear) and deletions and access to elements at the other end (the front) (FIFO)."))
 
+(defmethod emptyp ((q queue))
+  (zerop (size q)))
+
 (defmethod clear ((q queue))
   (loop until (emptyp q) do (dequeue q)))
 
 (defgeneric enqueue (queue obj)
   (:documentation "Enqueue an object at the rear of the queue"))
-;; (defmethod enqueue :around ((q queue) obj)
-;;   (with-slots (type) q
-;;     (if (typep obj type)
-;;         (call-next-method)
-;;         (error "~A is not of type ~A" obj type))))
 (defmethod enqueue :around ((q queue) obj)
   (if (typep obj (type q))
       (call-next-method)
@@ -127,8 +125,8 @@
   (with-slots (count) q
     count))
 
-(defmethod emptyp ((q array-queue))
-  (zerop (size q)))
+;; (defmethod emptyp ((q array-queue))
+;;   (zerop (size q)))
 
 ;;;
 ;;;    This is not good enough. Must release the references to elements. Use superclass method.
@@ -199,8 +197,8 @@
   (with-slots (count) q
     count))
 
-(defmethod emptyp ((q linked-queue))
-  (zerop (size q))) ; (null front)
+;; (defmethod emptyp ((q linked-queue))
+;;   (zerop (size q))) ; (null front)
 
 (defmethod clear ((q linked-queue))
   (with-slots (front rear count) q
@@ -233,8 +231,7 @@
 ;;;    CIRCULAR-QUEUE
 ;;;    See ch. 6 exercise 5
 ;;;    - This just obviates the need for two pointers in LINKED-QUEUE.
-;;;      INDEX points to next available CONS in which to enqueue elt. CDR
-;;;      points to front of queue.
+;;;      INDEX points to tail of queue, and its CDR points to front of queue.
 ;;;    
 (defclass circular-queue (queue)
   ((index :initform nil)
@@ -244,8 +241,8 @@
   (with-slots (count) q
     count))
 
-(defmethod emptyp ((q circular-queue))
-  (zerop (size q)))
+;; (defmethod emptyp ((q circular-queue))
+;;   (zerop (size q)))
 
 (defmethod clear ((q circular-queue))
   (with-slots (index count) q
@@ -255,7 +252,8 @@
 (defmethod enqueue ((q circular-queue) obj)
   (with-slots (index count) q
     (let ((node (cl:list obj)))
-      (cond ((null index) (setf (rest index) (setf index node)))
+      (cond ((null index) (setf index node
+                                (rest index) node))
             (t (setf (rest node) (rest index)
                      (rest index) node
                      index node))))
@@ -289,6 +287,9 @@
           rear front
           ass (last front))))
 
+;;;
+;;;    Override parent method -> grandparent!!
+;;;    
 (defmethod clear ((q recycling-queue))
   (loop until (emptyp q) do (dequeue q)))
 
@@ -372,8 +373,8 @@
   (with-slots (store) q
     (hash-table-count store)))
 
-(defmethod emptyp ((q hash-table-queue))
-  (zerop (size q)))
+;; (defmethod emptyp ((q hash-table-queue))
+;;   (zerop (size q)))
 
 (defmethod clear ((q hash-table-queue))
   (with-slots (store front rear) q
@@ -429,8 +430,8 @@
   (with-slots (count) q
     count))
 
-(defmethod emptyp ((q persistent-queue))
-  (zerop (size q)))
+;; (defmethod emptyp ((q persistent-queue))
+;;   (zerop (size q)))
 
 (defmethod clear ((q persistent-queue))
   (make-instance 'persistent-queue :type (type q)))
@@ -459,8 +460,16 @@
   ()
   (:documentation "A deque is a double-ended queue allowing ENQUEUE and DEQUEUE operations on both the front and rear."))
 
-(defmethod emptyp ((dq deque))
-  (zerop (size dq)))
+;; (defmethod emptyp ((dq deque))
+;;   (zerop (size dq)))
+
+;;;
+;;; ????
+;;; 
+;; (defmethod dequeue :around ((dq deque))
+;;   (if (emptyp dq)
+;;       (error "Deque is empty")
+;;       (call-next-method)))
 
 (defgeneric enqueue* (deque obj)
   (:documentation "Enqueue an object at the front of the deque"))
@@ -496,10 +505,17 @@
 ;;;    Doubly-linked-list deque
 ;;;    
 (defclass dll-deque (deque)
-  ((list :initarg :list)))
+;  ((list :initarg :list)))
+  ((list)))
+
+(defmethod initialize-instance :after ((dq dll-deque) &rest initargs)
+  (declare (ignore initargs))
+  (with-slots (type list) dq
+    (setf list (make-doubly-linked-list :type `(or null ,type)))) ) ; ?? FILL-ELT is never used!!
 
 (defun make-dll-deque (&optional (type t))
-  (make-instance 'dll-deque :type type :list (make-doubly-linked-list :type type))) ; ??
+  (make-instance 'dll-deque :type type))
+;  (make-instance 'dll-deque :type type :list (make-doubly-linked-list :type type))) ; ??
 ;  (make-instance 'dll-deque :type type :list (make-doubly-linked-list))) ; ??
 
 (defmethod size ((dq dll-deque))
@@ -538,6 +554,7 @@
 
 ;;;
 ;;;   HASH-TABLE-DEQUE
+;;;   This must be distinct from HASH-TABLE-QUEUE. See below.
 ;;;
 (defclass hash-table-deque (deque)
   ((store :initform (make-hash-table))
@@ -603,3 +620,104 @@
 (defmethod rear ((dq hash-table-deque))
   (with-slots (store rear) dq
     (values (gethash rear store))))
+
+;;;
+;;;    The following class definition, while simple, does not work due to subtle differences
+;;;    in the semantics of FRONT and REAR in HASH-TABLE-QUEUE vs. HASH-TABLE-DEQUE.
+;;;    -In HASH-TABLE-QUEUE
+;;;     -REAR is the index for the next item to enqueue.
+;;;     -As long as the queue is not empty, FRONT is the index of the next item to dequeue.
+;;;      (When (= front rear) the queue is empty)
+;;;
+;;;    -But in HASH-TABLE-DEQUE, FRONT and REAR are symmetric. Either can be an index to
+;;;     add another item or an index to current front/rear item. Once the first item has
+;;;     been added to an empty deque, both FRONT and REAR are still equal and can both
+;;;     be used to retrieve the front item which is also the rear item.
+;;;
+;;;   HASH-TABLE-DEQUE-X
+;;;
+;; (defclass hash-table-deque-x (deque hash-table-queue) ())
+
+;; (defun make-hash-table-deque-x (&optional (type t))
+;;   (make-instance 'hash-table-deque-x :type type))
+
+;; (defmethod enqueue* ((dq hash-table-deque-x) obj)
+;;   (with-slots (store front) dq                     <---- Subclass shouldn't know so much about superclass?
+;;     (setf (gethash front store) obj)
+;;     (decf front)))
+
+;; (defmethod dequeue* ((dq hash-table-deque-x))
+;;   (with-slots (store rear) dq
+;;     (prog1 (rear dq)
+;;       (remhash rear store)
+;;       (decf rear))))
+
+;; (defmethod rear ((dq hash-table-deque-x))
+;;   (with-slots (store rear) dq
+;;     (values (gethash (1- rear) store))))
+
+
+;;;
+;;;    PERSISTENT-DEQUE
+;;;
+;; (defclass persistent-deque (deque)
+;;   ((list)))
+
+;; (defmethod initialize-instance :after ((dq deque) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (type list) dq
+;;     (setf list (make-persistent-list :type `(or null ,type)))) )
+
+;; (defclass persistent-deque (deque)
+;;   ((list :initform nil)))
+
+(let ((empty (make-persistent-list)))
+  (defclass persistent-deque (deque)
+    ((list :initform empty))))
+
+;;; !!!!
+(defmethod initialize-instance :after ((dq deque) &rest initargs)
+  (declare (ignore initargs)))
+
+(defmethod size ((dq persistent-deque))
+  (with-slots (list) dq
+    (size list)))
+
+(defmethod clear ((dq persistent-deque))
+  (make-instance 'persistent-deque :type (type dq)))
+
+;; (defmethod enqueue :before ((dq persistent-deque) obj)
+;;   (with-slots (type list) dq
+;;     (when (null list)
+;;       (setf list (make-persistent-list :type `(or null ,type)))) ))
+
+;; (defmethod enqueue* :before ((dq persistent-deque) obj)
+;;   (with-slots (type list) dq
+;;     (when (null list)
+;;       (setf list (make-persistent-list :type `(or null ,type)))) ))
+
+(flet ((initialize-deque (type list)
+         (let ((new-deque (make-instance 'persistent-deque :type type)))
+           (with-slots ((new-list list)) new-deque
+             (setf new-list list))
+           new-deque)))
+  (defmethod enqueue ((dq persistent-deque) obj)
+    (with-slots (type list) dq
+      (initialize-deque type (add list obj))))
+  (defmethod enqueue* ((dq persistent-deque) obj)
+    (with-slots (type list) dq
+      (initialize-deque type (insert list 0 obj))))
+  (defmethod dequeue ((dq persistent-deque))
+    (with-slots (type list) dq
+      (values (initialize-deque type (delete list 0)) (front dq))))
+  (defmethod dequeue* ((dq persistent-deque))
+    (with-slots (type list) dq
+      (values (initialize-deque type (delete list -1)) (rear dq)))) )
+
+(defmethod front ((dq persistent-deque))
+  (with-slots (list) dq
+    (nth list 0)))
+
+(defmethod rear ((dq persistent-deque))
+  (with-slots (list) dq
+    (nth list -1)))
