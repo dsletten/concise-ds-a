@@ -53,7 +53,16 @@
 ;;;;    Fix SINGLY-LINKED-LIST iterator/list-iterator STORE vs. FRONT!!!
 ;;;;    Refactor ERROR messages...
 ;;;;    - Other API methods: APPEND, REVERSE, ...
+;;;;
+
+
+;;;;
+;;;;    Implement ITERATOR/LIST-ITERATOR as slots on a list instance? Slot would be factory
+;;;;    function to produce the desired iterator...
 ;;;;    
+
+
+
 (in-package :containers)
 
 ;; (defvar *sll* (make-instance 'singly-linked-list :type '(satisfies evenp) :fill-elt 0))
@@ -285,85 +294,93 @@
   (declare (ignore i))
   (count-modification l))
 
+
 ;;;
-;;;    LINKED-LIST
+;;;    This class was designed to allow a distinction between mutable and immutable linked lists,
+;;;    analogously to LIST/MUTABLE-LIST. However, these operations that operate on nodes of a
+;;;    linked list only make sense for mutable lists. Persistent lists have to rebuild structure,
+;;;    so there is no efficiency gain to providing these methods (i.e., referencing a numeric index
+;;;    works as well as a pointer to a node.)
+;;;    In reality, these methods are only used by list iterators. It should not be possible to
+;;;    get ahold of list nodes otherwise. A mutable list can do surgery in place whereas a persistent
+;;;    list has to rebuild the head of the list.
+;;;    
+;; ;;;
+;; ;;;    LINKED-LIST
+;; ;;;
+;; (defclass linked-list (list)
+;;   ()
+;;   (:documentation "A list implemented with linked nodes."))
+
 ;;;
+;;;    MUTABLE-LINKED-LIST
+;;;
+(defclass mutable-linked-list (mutable-list)
+  ()
+  (:documentation "A list implemented with linked nodes whose structure and elements can be modified."))
+
 ;;;    These methods are dangerous? We can't verify that the given NODE is actually
 ;;;    part of the list structure? (Without expensive linear search which defeats the
 ;;;    whole point of these methods...)
 ;;;
 ;;;    Don't export names. DELETE (public) renamed to DELETE-NODE/DELETE-CHILD
 ;;;    
-(defclass linked-list (list)
-  ()
-  (:documentation "A list implemented with linked nodes."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Structural modification;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defgeneric insert-before (list node obj)
   (:documentation "Insert the object before the specified node."))
-(defmethod insert-before :around ((l linked-list) node obj)
+(defmethod insert-before :around ((l mutable-linked-list) node obj)
   (cond ((not (typep obj (type l))) (error "~A is not of type ~A" obj (type l)))
         ((emptyp l) (error "List is empty")) ; NODE can't belong to L!
         ((null node) (error "Invalid node"))
         (t (call-next-method))))
-(defmethod insert-before ((l linked-list) node obj)
+(defmethod insert-before ((l mutable-linked-list) node obj)
   (declare (ignore l node obj))
-  (error "LINKED-LIST does not implement INSERT"))
-
-(defgeneric insert-after (list node obj)
-  (:documentation "Insert the object after the specified node."))
-(defmethod insert-after :around ((l linked-list) node obj)
-  (cond ((not (typep obj (type l))) (error "~A is not of type ~A" obj (type l)))
-        ((emptyp l) (error "List is empty")) ; NODE can't belong to L!
-        ((null node) (error "Invalid node"))
-        (t (call-next-method))))
-(defmethod insert-after ((l linked-list) node obj)
-  (declare (ignore l node obj))
-  (error "LINKED-LIST does not implement INSERT"))
-
-(defgeneric delete-node (list doomed)
-  (:documentation "Delete the specified node from the list."))
-(defmethod delete-node :around ((l linked-list) doomed)
-  (cond ((emptyp l) (error "List is empty")) ; DOOMED can't belong to L!
-        ((null doomed) (error "Invalid node"))
-        (t (call-next-method))))
-(defmethod delete-node ((l linked-list) doomed)
-  (declare (ignore l doomed))
-  (error "LINKED-LIST does not implement DELETE-NODE"))
-
-(defgeneric delete-child (list parent)
-  (:documentation "Delete the child of the specified node from the list."))
-(defmethod delete-child :around ((l linked-list) parent)
-  (cond ((emptyp l) (error "List is empty")) ; PARENT can't belong to L!
-        ((null parent) (error "Invalid node"))
-        (t (call-next-method))))
-(defmethod delete-child ((l linked-list) parent)
-  (declare (ignore l parent))
-  (error "LINKED-LIST does not implement DELETE-child"))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;
-;;;    MUTABLE-LINKED-LIST
-;;;
-(defclass mutable-linked-list (mutable-list linked-list)
-  ()
-  (:documentation "A list implemented with linked nodes whose structure and elements can be modified."))
-
+  (error "MUTABLE-LINKED-LIST does not implement INSERT-BEFORE"))
 (defmethod insert-before :after ((l mutable-linked-list) node obj)
   (declare (ignore node obj))
   (count-modification l))
 
+(defgeneric insert-after (list node obj)
+  (:documentation "Insert the object after the specified node."))
+(defmethod insert-after :around ((l mutable-linked-list) node obj)
+  (cond ((not (typep obj (type l))) (error "~A is not of type ~A" obj (type l)))
+        ((emptyp l) (error "List is empty")) ; NODE can't belong to L!
+        ((null node) (error "Invalid node"))
+        (t (call-next-method))))
+(defmethod insert-after ((l mutable-linked-list) node obj)
+  (declare (ignore l node obj))
+  (error "MUTABLE-LINKED-LIST does not implement INSERT-AFTER"))
 (defmethod insert-after :after ((l mutable-linked-list) node obj)
   (declare (ignore node obj))
   (count-modification l))
 
+(defgeneric delete-node (list doomed)
+  (:documentation "Delete the specified node from the list."))
+(defmethod delete-node :around ((l mutable-linked-list) doomed)
+  (cond ((emptyp l) (error "List is empty")) ; DOOMED can't belong to L!
+        ((null doomed) (error "Invalid node"))
+        (t (call-next-method))))
+(defmethod delete-node ((l mutable-linked-list) doomed)
+  (declare (ignore l doomed))
+  (error "MUTABLE-LINKED-LIST does not implement DELETE-NODE"))
 (defmethod delete-node :after ((l mutable-linked-list) doomed)
   (declare (ignore doomed))
   (count-modification l))
 
+(defgeneric delete-child (list parent)
+  (:documentation "Delete the child of the specified node from the list."))
+(defmethod delete-child :around ((l mutable-linked-list) parent)
+  (cond ((emptyp l) (error "List is empty")) ; PARENT can't belong to L!
+        ((null parent) (error "Invalid node"))
+        (t (call-next-method))))
+(defmethod delete-child ((l mutable-linked-list) parent)
+  (declare (ignore l parent))
+  (error "MUTABLE-LINKED-LIST does not implement DELETE-CHILD"))
 (defmethod delete-child :after ((l mutable-linked-list) parent)
   (declare (ignore parent))
   (count-modification l))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;
 ;;;    ARRAY-LIST
@@ -1359,7 +1376,6 @@
                      (dlink tail dcons))))
           (add-nodes store dcons (rest objs)))) )
     l))
-
 (defmethod add :after ((l doubly-linked-list-old) &rest objs)
   (unless (null objs)
     (with-slots (cursor) l
@@ -1416,7 +1432,6 @@
             (t (let ((dcons (nth-dcons-old l i)))
                  (dlink (previous dcons) new-dcons)
                  (dlink new-dcons dcons)))) )))
-
 (defmethod insert :after ((l doubly-linked-list-old) (i integer) obj)
   (declare (ignore obj))
   (with-slots (count cursor) l
@@ -1439,7 +1454,6 @@
         (let ((doomed (nth-dcons-old l i)))
           (prog1 (content doomed)
             (dlink (previous doomed) (next doomed)))) )))
-
 (defmethod delete :after ((l doubly-linked-list-old) (i integer))
   (declare (ignore i))
   (with-slots (count cursor) l
