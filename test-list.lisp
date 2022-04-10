@@ -282,6 +282,12 @@
 ;;          (fill list 10000)
 ;;          (loop until (emptyp list) do (delete list -1)))) ))) ; Very fast for HASH-TABLE-LIST/ARRAY-LIST
 
+;;;
+;;;    Time:
+;;;    - NTH
+;;;    - Sequential access
+;;;    - Random access
+;;;    
 (defun test-list-time (list-constructor)
   (let ((list (funcall list-constructor)))
     (time (dotimes (i 10 t)

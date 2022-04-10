@@ -564,7 +564,8 @@
     (apply #'add al (loop for j from (min i count) below (min (+ i n) count) collect (nth l j)))) )
 
 ;;;
-;;;    Used by ARRAY-LIST and HASH-TABLE-LIST
+;;;    RANDOM-ACCESS-LIST-ITERATOR
+;;;    -Used by ARRAY-LIST and HASH-TABLE-LIST
 ;;;    
 (defclass random-access-list-iterator (mutable-collection-iterator)
   ((cursor :initform 0 :type integer)))
@@ -984,8 +985,9 @@
       (apply #'add sllx (subseq front (min i count) (min (+ i n) count)))) ))
 
 ;;;
-;;;    Don't need to hold onto LIST after initialization?
-;;;    CURSOR added to avoid manipulating LIST directly...
+;;;    SINGLY-LINKED-LIST-ITERATOR
+;;;    - Don't need to hold onto LIST after initialization?
+;;;    - CURSOR added to avoid manipulating LIST directly...
 ;;;    
 (defclass singly-linked-list-iterator (mutable-collection-iterator)
   ((cursor)))
@@ -1914,6 +1916,9 @@
 ;;       (when (funcall test obj (nth l i)) ; Reasonable due to cursor! Actually no...
 ;;         (return i)))) )
 
+;;;
+;;;    DOUBLY-LINKED-LIST-ITERATOR
+;;;    
 (defclass doubly-linked-list-iterator (mutable-collection-iterator)
   ((cursor)
    (sealed-for-your-protection :initform t)))
@@ -2469,12 +2474,7 @@
     (position obj store :test test)))
 
 ;;;
-;;;    Don't need to hold onto LIST after initialization?
-;;;    CURSOR added to avoid manipulating LIST directly...
-;;;    
-;;;
-;;;    Identical to SINGLY-LINKED-LIST-ITERATOR?!
-;;;    Iterator should be persistent too!
+;;;    PERSISTENT-LIST-ITERATOR
 ;;;    
 (defclass persistent-list-iterator (iterator)
   ((collection :initarg :collection)))
@@ -2486,7 +2486,7 @@
 (defmethod next ((i persistent-list-iterator))
   (with-slots (collection) i
     (cond ((done i) i)
-          (t (let ((new-iterator (make-instance 'persistent-list-iterator :collection (delete collection 0))))
+          (t (let ((new-iterator (iterator (delete collection 0))))
                (if (done new-iterator)
                    (values new-iterator nil)
                    (values new-iterator (current new-iterator)))) ))))
@@ -2650,67 +2650,63 @@
  (with-slots (list expected-modification-count) i
    (/= expected-modification-count (slot-value list 'modification-count))))
 
+(defmethod check-co-modification ((i mutable-list-list-iterator))
+  (when (co-modified i)
+    (error "List iterator invalid due to structural modification of list")))
+  
 (defmethod current :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod current ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement CURRENT"))
 
 (defmethod current-index :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod current-index ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement CURRENT-INDEX"))
 
 (defmethod (setf current) :around (obj (i mutable-list-list-iterator))
   (declare (ignore obj))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod (setf current) (obj (i mutable-list-list-iterator))
   (declare (ignore i obj))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement (SETF CURRENT)"))
 
 (defmethod has-next :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of list")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod has-next ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement HAS-NEXT"))
 
 (defmethod has-previous :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of list")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod has-previous ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement HAS-PREVIOUS"))
 
 (defmethod next :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod next ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement NEXT"))
 
 (defmethod previous :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod previous ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement PREVIOUS"))
 
 (defmethod remove :around ((i mutable-list-list-iterator))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod remove ((i mutable-list-list-iterator))
   (declare (ignore i))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement REMOVE"))
@@ -2719,9 +2715,8 @@
 
 (defmethod add-before :around ((i mutable-list-list-iterator) obj)
   (declare (ignore obj))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod add-before ((i mutable-list-list-iterator) obj)
   (declare (ignore i obj))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement ADD-BEFORE"))
@@ -2731,9 +2726,8 @@
 
 (defmethod add-after :around ((i mutable-list-list-iterator) obj)
   (declare (ignore obj))
-  (if (co-modified i)
-      (error "List iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod add-after ((i mutable-list-list-iterator) obj)
   (declare (ignore i obj))
   (error "MUTABLE-LIST-LIST-ITERATOR does not implement ADD-AFTER"))

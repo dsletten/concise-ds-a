@@ -24,6 +24,7 @@
 ;;;;   Notes:
 ;;;;   - ARRAY-QUEUE is the traditional ring buffer. (另见 (ADJUSTABLE-)CIRCULAR-ARRAY-QUEUE in "foundations")
 ;;;;   - CIRCULAR-QUEUE, RECYCLING-QUEUE, and RING-BUFFER are just variants of LINKED-QUEUE:
+;;;;     (RECYCLING-QUEUE and RING-BUFFER require inapproriate access to slots in LINKED-QUEUE)???
 ;;;;     - CIRCULAR-QUEUE grows/shrinks with each operation.
 ;;;;     - RECYCLING-QUEUE/RING-BUFFER start pre-allocated, overwrite existing CONSes, grow as needed and never shrink.
 ;;;;       - At first glance, RECYCLING-QUEUE appears to be an interesting variation. In fact, it is only trivially different from RING-BUFFER
@@ -53,6 +54,11 @@
 ;;;;             v        v                 v        v
 ;;;;             9        10               NIL      NIL
 ;;;;
+;;;;
+;;;;
+;;;;    Fox does not emphasize how a list can be used to implement a queue.
+;;;;    见 LINKED-LIST-QUEUE, PERSISTENT-LIST-QUEUE
+;;;;    
 
 (in-package :containers)
 
@@ -226,6 +232,36 @@
 (defmethod front ((q linked-queue))
   (with-slots (front) q
     (first front)))
+
+;;;
+;;;    LINKED-LIST-QUEUE
+;;;    - This is a TCONC queue wrapped by a list.
+;;;    
+(defclass linked-list-queue (queue)
+  ((list :initform (make-linked-list-x)))) ; FILL-ELT is never used!!
+
+(defmethod size ((q linked-list-queue))
+  (with-slots (list) q
+    (size list)))
+
+;; (defmethod emptyp ((q linked-list-queue))
+;;   (zerop (size q))) ; (null front)
+
+(defmethod clear ((q linked-list-queue))
+  (with-slots (list) q
+    (clear list)))
+
+(defmethod enqueue ((q linked-list-queue) obj)
+  (with-slots (list) q
+    (add list obj)))
+
+(defmethod dequeue ((q linked-list-queue))
+  (with-slots (list) q
+    (delete list 0)))
+
+(defmethod front ((q linked-list-queue))
+  (with-slots (list) q
+    (nth list 0)))
 
 ;;;
 ;;;    CIRCULAR-QUEUE
@@ -408,6 +444,16 @@
    (rear :initform '())
    (count :initform 0 :type integer)))
 
+(defmethod size ((q persistent-queue))
+  (with-slots (count) q
+    count))
+
+;; (defmethod emptyp ((q persistent-queue))
+;;   (zerop (size q)))
+
+(defmethod clear ((q persistent-queue))
+  (make-instance 'persistent-queue :type (type q)))
+
 (flet ((initialize-queue (type front rear count)
          (let ((new-queue (make-instance 'persistent-queue :type type)))
            (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
@@ -426,16 +472,6 @@
           (values (initialize-queue type (reverse rear) '() (1- count)) (front q))
           (values (initialize-queue type (rest front) rear (1- count)) (front q)))) ))
 
-(defmethod size ((q persistent-queue))
-  (with-slots (count) q
-    count))
-
-;; (defmethod emptyp ((q persistent-queue))
-;;   (zerop (size q)))
-
-(defmethod clear ((q persistent-queue))
-  (make-instance 'persistent-queue :type (type q)))
-
 (defmethod front ((q persistent-queue))
   (with-slots (front) q
     (first front)))
@@ -452,6 +488,39 @@
           until (emptyp queue)
           do (print elt)
           finally (print elt))))
+
+;;;
+;;;    PERSISTENT-LIST-QUEUE
+;;;
+(let ((empty (make-persistent-list)))
+  (defclass persistent-list-queue (queue)
+    ((list :initform empty))))
+
+(defmethod size ((q persistent-list-queue))
+  (with-slots (list) q
+    (size list)))
+
+;; (defmethod emptyp ((q persistent-list-queue))
+;;   (zerop (size q)))
+
+(defmethod clear ((q persistent-list-queue))
+  (make-instance 'persistent-list-queue :type (type q)))
+
+(flet ((initialize-queue (type list)
+         (let ((new-queue (make-instance 'persistent-list-queue :type type)))
+           (with-slots ((new-list list)) new-queue
+             (setf new-list list))
+           new-queue)))
+  (defmethod enqueue ((q persistent-list-queue) obj)
+    (with-slots (type list) q
+      (initialize-queue type (add list obj)))) ; Not cheap
+  (defmethod dequeue ((q persistent-list-queue))
+    (with-slots (type list) q
+      (values (initialize-queue type (delete list 0)) (front q)))) )
+
+(defmethod front ((q persistent-list-queue))
+  (with-slots (list) q
+    (nth list 0)))
 
 ;;;
 ;;;    DEQUE (Double-ended queue)
@@ -502,16 +571,19 @@
   (error "DEQUE does not implement REAR"))
 
 ;;;
+;;;    Ring buffer deque
+;;;    
+
+;;;
 ;;;    Doubly-linked-list deque
 ;;;    
 (defclass dll-deque (deque)
-;  ((list :initarg :list)))
-  ((list)))
+  ((list :initform (make-doubly-linked-list)))) ; FILL-ELT is irrelevant
 
-(defmethod initialize-instance :after ((dq dll-deque) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (type list) dq
-    (setf list (make-doubly-linked-list :type `(or null ,type)))) ) ; ?? FILL-ELT is never used!!
+;; (defmethod initialize-instance :after ((dq dll-deque) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (type list) dq
+;;     (setf list (make-doubly-linked-list :type `(or null ,type)))) ) ; ?? FILL-ELT is never used!!
 
 (defun make-dll-deque (&optional (type t))
   (make-instance 'dll-deque :type type))

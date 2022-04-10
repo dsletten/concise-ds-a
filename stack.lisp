@@ -22,8 +22,9 @@
 ;;;;   Example:
 ;;;;
 ;;;;   Notes:
-;;;;
-;;;;
+;;;;    Fox does not emphasize how a list can be used to implement a stack.
+;;;;    见 SINGLY-LINKED-LIST-STACK, PERSISTENT-LIST-STACK
+;;;;    
 
 (in-package :containers)
 
@@ -141,6 +142,42 @@
     (first top)))
 
 ;;;
+;;;    LINKED-LIST-STACK
+;;;
+;;;    Complications with layering data structures...
+;;;    (setf *slls* (make-instance 'linked-list-stack :type 'integer))
+;;;      Incompatible FILL-ELT type: NULL should be: INTEGER
+;;;    (setf *slls* (make-instance 'linked-list-stack :type 'integer :fill-elt 0))
+;;;      Invalid initialization argument:
+;;;          :FILL-ELT
+(defclass linked-list-stack (stack)
+  ((list :initform (make-linked-list)))) ; FILL-ELT is never used!!
+
+(defmethod size ((s linked-list-stack))
+  (with-slots (list) s
+    (size list)))
+
+(defmethod emptyp ((s linked-list-stack))
+  (with-slots (list) s
+    (emptyp list)))
+
+(defmethod clear ((s linked-list-stack))
+  (with-slots (list) s
+    (clear list)))
+
+(defmethod push ((s linked-list-stack) obj)
+  (with-slots (list) s
+    (insert list 0 obj)))
+
+(defmethod pop ((s linked-list-stack))
+  (with-slots (list) s
+    (delete list 0)))
+
+(defmethod peek ((s linked-list-stack))
+  (with-slots (list) s
+    (nth list 0)))
+
+;;;
 ;;;    HASH-TABLE-STACK
 ;;;
 (defclass hash-table-stack (stack)
@@ -185,6 +222,17 @@
   ((top :initform '())
    (count :initform 0 :type integer)))
 
+(defmethod size ((s persistent-stack))
+  (with-slots (count) s
+    count))
+
+(defmethod emptyp ((s persistent-stack))
+  (with-slots (top) s
+    (null top)))
+
+(defmethod clear ((s persistent-stack))
+  (make-instance 'persistent-stack :type (type s)))
+
 (flet ((initialize-stack (type top count)
          (let ((new-stack (make-instance 'persistent-stack :type type)))
            (with-slots ((new-top top) (new-count count)) new-stack
@@ -198,17 +246,40 @@
     (with-slots (type top count) s
       (values (initialize-stack type (rest top) (1- count)) (peek s)))) )
 
-(defmethod size ((s persistent-stack))
-  (with-slots (count) s
-    count))
-
-(defmethod emptyp ((s persistent-stack))
-  (with-slots (top) s
-    (null top)))
-
-(defmethod clear ((s persistent-stack))
-  (make-instance 'persistent-stack :type (type s)))
-
 (defmethod peek ((s persistent-stack))
   (with-slots (top) s
     (first top)))
+
+;;;
+;;;    PERSISTENT-LIST-STACK
+;;;
+(let ((empty (make-persistent-list))) ; FILL-ELT is never used!!
+  (defclass persistent-list-stack (stack)
+    ((list :initform empty))))
+
+(defmethod size ((s persistent-list-stack))
+  (with-slots (list) s
+    (size list)))
+
+(defmethod emptyp ((s persistent-list-stack))
+  (with-slots (list) s
+    (emptyp list)))
+
+(defmethod clear ((s persistent-list-stack))
+  (make-instance 'persistent-list-stack :type (type s)))
+
+(flet ((initialize-stack (type list)
+         (let ((new-stack (make-instance 'persistent-list-stack :type type)))
+           (with-slots ((new-list list)) new-stack
+             (setf new-list list))
+           new-stack)))
+  (defmethod push ((s persistent-list-stack) obj)
+    (with-slots (type list) s
+      (initialize-stack type (insert list 0 obj))))
+  (defmethod pop ((s persistent-list-stack))
+    (with-slots (type list) s
+      (values (initialize-stack type (delete list 0)) (peek s)))) )
+
+(defmethod peek ((s persistent-list-stack))
+  (with-slots (list) s
+    (nth list 0)))

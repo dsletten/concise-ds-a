@@ -166,6 +166,17 @@
    (test-stack-time #'(lambda () (make-instance 'linked-stack)))
    (test-stack-wave #'(lambda () (make-instance 'linked-stack)))) )
 
+(deftest test-linked-list-stack ()
+  (check
+   (test-stack-constructor #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-emptyp #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-size #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-clear #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-pop #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-peek #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-time #'(lambda () (make-instance 'linked-list-stack)))
+   (test-stack-wave #'(lambda () (make-instance 'linked-list-stack)))) )
+
 (deftest test-array-stack ()
   (check
    (test-stack-constructor #'(lambda () (make-instance 'array-stack)))
@@ -191,5 +202,6 @@
 (deftest test-stack-all ()
   (check
    (test-linked-stack)
+   (test-linked-list-stack)
    (test-array-stack)
    (test-hash-table-stack)))

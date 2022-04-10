@@ -162,6 +162,12 @@
   ()
   (:documentation "External iterator for a collection."))
 
+(defgeneric done (iterator)
+  (:documentation "Is the traversal completed?"))
+(defmethod done ((i iterator))
+  (declare (ignore i))
+  (error "ITERATOR does not implement DONE"))
+
 ;;; FIRST, REWIND???
 (defgeneric current (iterator)
   (:documentation "Returns the current element of the iterator traversal."))
@@ -179,12 +185,6 @@
 (defmethod next ((i iterator))
   (declare (ignore i))
   (error "ITERATOR does not implement NEXT"))
-
-(defgeneric done (iterator)
-  (:documentation "Is the traversal completed?"))
-(defmethod done ((i iterator))
-  (declare (ignore i))
-  (error "ITERATOR does not implement DONE"))
 
 ;;;
 ;;;    MUTABLE-COLLECTION-ITERATOR
@@ -205,26 +205,29 @@
  (with-slots (collection expected-modification-count) i
    (/= expected-modification-count (slot-value collection 'modification-count))))
 
+(defgeneric check-co-modification (iterator)
+  (:documentation "Signal error when collection structure has changed."))
+(defmethod check-co-modification ((i mutable-collection-iterator))
+  (when (co-modified i)
+    (error "Iterator invalid due to structural modification of collection")))
+
+(defmethod done :around ((i mutable-collection-iterator))
+  (check-co-modification i)
+  (call-next-method))
+(defmethod done ((i mutable-collection-iterator))
+  (declare (ignore i))
+  (error "MUTABLE-COLLECTION-ITERATOR does not implement DONE"))
+    
 (defmethod current :around ((i mutable-collection-iterator))
-  (if (co-modified i)
-      (error "Iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod current ((i mutable-collection-iterator))
   (declare (ignore i))
   (error "MUTABLE-COLLECTION-ITERATOR does not implement CURRENT"))
 
 (defmethod next :around ((i mutable-collection-iterator))
-  (if (co-modified i)
-      (error "Iterator invalid due to structural modification of collection")
-      (call-next-method)))
+  (check-co-modification i)
+  (call-next-method))
 (defmethod next ((i mutable-collection-iterator))
   (declare (ignore i))
   (error "MUTABLE-COLLECTION-ITERATOR does not implement NEXT"))
-
-(defmethod done :around ((i mutable-collection-iterator))
-  (if (co-modified i)
-      (error "Iterator invalid due to structural modification of collection")
-      (call-next-method)))
-(defmethod done ((i mutable-collection-iterator))
-  (declare (ignore i))
-  (error "MUTABLE-COLLECTION-ITERATOR does not implement DONE"))

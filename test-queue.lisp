@@ -171,6 +171,17 @@
    (test-queue-time #'(lambda () (make-instance 'linked-queue)))
    (test-queue-wave #'(lambda () (make-instance 'linked-queue)))) )
 
+(deftest test-linked-list-queue ()
+  (check
+   (test-queue-constructor #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-emptyp #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-size #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-clear #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-dequeue #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-front #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-time #'(lambda () (make-instance 'linked-list-queue)))
+   (test-queue-wave #'(lambda () (make-instance 'linked-list-queue)))) )
+
 (deftest test-circular-queue ()
   (check
    (test-queue-constructor #'(lambda () (make-instance 'circular-queue)))
@@ -245,6 +256,7 @@
   (check
    (test-array-queue)
    (test-linked-queue)
+   (test-linked-list-queue)
    (test-circular-queue)
    (test-recycling-queue)
    (test-ring-buffer)
