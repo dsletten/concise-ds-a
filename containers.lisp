@@ -159,14 +159,16 @@
 ;;;    - Arbitrary tree: push parent + remaining children
 ;;;    
 (defclass iterator ()
-  ()
+  ((done :initarg :done :documentation "A function that determines whether traversal is complete.")
+   (current :initarg :current :documentation "A function that yields the current element of the collection.")
+   (advance :initarg :advance :documentation "A function that moves to the next element if any."))
   (:documentation "External iterator for a collection."))
 
 (defgeneric done (iterator)
   (:documentation "Is the traversal completed?"))
 (defmethod done ((i iterator))
-  (declare (ignore i))
-  (error "ITERATOR does not implement DONE"))
+  (with-slots (done) i
+    (funcall done)))
 
 ;;; FIRST, REWIND???
 (defgeneric current (iterator)
@@ -176,34 +178,38 @@
       (error "Iteration already finished")
       (call-next-method)))
 (defmethod current ((i iterator))
-  (declare (ignore i))
-  (error "ITERATOR does not implement CURRENT"))
+  (with-slots (current) i
+    (funcall current)))
 
 ;;; Empty???
 (defgeneric next (iterator)
   (:documentation "Advances iterator to the next element of the traversal. Returns that element or NIL if at end."))
 (defmethod next ((i iterator))
-  (declare (ignore i))
-  (error "ITERATOR does not implement NEXT"))
+  (with-slots (advance) i
+    (cond ((done i) nil)
+          (t (funcall advance)
+             (if (done i)
+                 nil
+                 (current i)))) ))
 
 ;;;
 ;;;    MUTABLE-COLLECTION-ITERATOR
 ;;;    
 (defclass mutable-collection-iterator (iterator)
-  ((collection :initarg :collection)
+  ((modification-count :initarg :modification-count :documentation "A function that produces the modification count for the collection.")
    (expected-modification-count :type integer))
   (:documentation "External iterator for a mutable collection."))
 
 (defmethod initialize-instance :after ((i mutable-collection-iterator) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (collection expected-modification-count) i
-    (setf expected-modification-count (slot-value collection 'modification-count))))
+  (with-slots (modification-count expected-modification-count) i
+    (setf expected-modification-count (funcall modification-count))))
 
 (defgeneric co-modified (iterator)
   (:documentation "Check whether structure of underlying collection has been changed."))
 (defmethod co-modified ((i mutable-collection-iterator))
- (with-slots (collection expected-modification-count) i
-   (/= expected-modification-count (slot-value collection 'modification-count))))
+  (with-slots (modification-count expected-modification-count) i
+    (/= expected-modification-count (funcall modification-count))))
 
 (defgeneric check-co-modification (iterator)
   (:documentation "Signal error when collection structure has changed."))
@@ -214,20 +220,27 @@
 (defmethod done :around ((i mutable-collection-iterator))
   (check-co-modification i)
   (call-next-method))
-(defmethod done ((i mutable-collection-iterator))
-  (declare (ignore i))
-  (error "MUTABLE-COLLECTION-ITERATOR does not implement DONE"))
     
 (defmethod current :around ((i mutable-collection-iterator))
   (check-co-modification i)
   (call-next-method))
-(defmethod current ((i mutable-collection-iterator))
-  (declare (ignore i))
-  (error "MUTABLE-COLLECTION-ITERATOR does not implement CURRENT"))
 
 (defmethod next :around ((i mutable-collection-iterator))
   (check-co-modification i)
   (call-next-method))
-(defmethod next ((i mutable-collection-iterator))
-  (declare (ignore i))
-  (error "MUTABLE-COLLECTION-ITERATOR does not implement NEXT"))
+
+;;;
+;;;    PERSISTENT-COLLECTION-ITERATOR
+;;;    
+(defclass persistent-collection-iterator (iterator) ())
+
+(defmethod next ((i persistent-collection-iterator))
+  (with-slots (advance) i
+    (cond ((done i) i)
+          (t (let ((new-iterator (funcall advance)))
+               (if (done new-iterator)
+                   (values new-iterator nil)
+                   (values new-iterator (current new-iterator)))) ))))
+
+
+

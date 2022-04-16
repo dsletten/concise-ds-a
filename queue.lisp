@@ -58,7 +58,8 @@
 ;;;;
 ;;;;    Fox does not emphasize how a list can be used to implement a queue.
 ;;;;    见 LINKED-LIST-QUEUE, PERSISTENT-LIST-QUEUE
-;;;;    
+;;;;
+;;;;    DEQUE inherits QUEUE error messages?!
 
 (in-package :containers)
 
