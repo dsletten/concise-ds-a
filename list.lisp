@@ -54,6 +54,16 @@
 ;;;;   - A closure can be a side door to provide controlled access from one object to another. The
 ;;;;     front door API is available to everyone but requires a reference to an object. That reference
 ;;;;     also opens up the back door via SLOT-VALUE. But a closure limits access.
+;;;;   - No inheritanct w/ closures. Is this the same general issue between functions vs. generic functions?
+;;;;   - Inheritance flow is inverted?
+;;;;     Previously, subclass implemented specific iterator behavior. Now superclass holds generic behavior
+;;;;     that is customized based on slots that it holds.
+;;;;     Example: ITERATOR < MUTABLE-COLLECTION-ITERATOR < RANDOM-ACCESS-LIST-ITERATOR
+;;;;     CURRENT method
+;;;;          MUT :AROUND -> I :AROUND -> RAND primary
+;;;;
+;;;;     Now
+;;;;          MUT :AROUND -> I :AROUND -> DONE slot (closure)
 ;;;;     
 
 ;;;;
@@ -1744,7 +1754,7 @@
            (declare (integer i))
            (if (emptyp list)
                (error "List is empty")
-               (with-slots (store count cursor) list
+               (with-slots (count cursor) list
                  (declare (integer count))
                  (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
                  (with-slots (node) cursor ; ????

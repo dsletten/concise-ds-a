@@ -222,7 +222,7 @@
   (call-next-method))
     
 (defmethod current :around ((i mutable-collection-iterator))
-  (check-co-modification i)
+  (check-co-modification i) ; Already checked by DONE!!
   (call-next-method))
 
 (defmethod next :around ((i mutable-collection-iterator))

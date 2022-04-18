@@ -1,0 +1,203 @@
+Template method design pattern vs. Auxiliary methods 220416
+
+- Not equivalent in the end
+- Template method -> Hollywood Principle
+  Inversion of subclass -> superclass invocation order
+  - Insisting on normal order of invocation requires:
+    - Unreasonable forethought in designing superclass or
+    - Risky reliance on subclass calling super() (This isn't really Template anymore?)
+=============================================================================================
+Simple case-- Single :AROUND method
+- :AROUND method is always invoked. Subclass cannot circumvent/override.
+- Subclass must implement primary method
+- Methods share same name. In particular, they all use the public facing name. Easier to see connected code.
+  - In a sense, this makes "support" methods (concrete/hook) visible, but they cannot be invoked independently.
+- Behavior can be decomposed/shared more easily.
+- Possible to use Template method in CLOS but some of the guarantees are lost?
+
+Calling (push s o) triggers STACK :AROUND method, then LINKED-STACK primary PUSH is called.
+(No CALL-NEXT-METHOD - STACK primary method ignore.)
+
+(defmethod push :around ((s stack) obj)
+  (if (typep obj (type s))
+      (call-next-method)
+      (error "~A is not of type ~A" obj (type s))))
+(defmethod push ((s stack) obj)
+  (declare (ignore s obj))
+  (error "STACK does not implement PUSH"))
+
+(defmethod push ((s linked-stack) obj)
+  (with-slots (top count) s
+    (setf top (cons obj top))
+    (incf count)))
+
+- Template method exists in (abstract) superclass. This is the public facing method.
+  - Methods supporting Template (abstract, concrete, hook) are not public.
+- Controls access to subclass methods. Does not rely on subclass (forgetting) calling super().
+- Superclass -> subclass (Hollywood)
+- Easy to (accidentally?) override in subclass in Ruby/JavaScript! Java can prevent via `final`.
+- Profusion of names! push -> do_push -> do_do_push
+  Better to give more distinct names: push -> push_elt
+
+Calling s.push(o) invokes Stack push() -> LinkedStack do_push()
+
+  class Stack < Dispenser
+    def push(obj)
+      raise ArgumentError.new("#{obj} is not of type #{type}") unless obj.is_a?(type)
+      do_push(obj)
+    end
+
+    private
+    def do_push(obj)
+      raise NoMethodError, "#{self.class} does not implement do_push()"
+    end
+
+  class LinkedStack < Stack
+    private
+    def do_push(obj)
+      @top = Node.new(obj, @top)
+      @count += 1
+    end
+
+=============================================================================================
+More complicated:
+- Multiple :AROUND methods, :BEFORE/:AFTER methods
+- Easy to miss the fact that execution order is different now!
+  CLOS:
+      MUTABLE-LIST :AROUND -> LIST :AROUND -> ARRAY-LIST-X primary -> MUTABLE-LIST :AFTER
+  Ruby:
+      List add -> MutableList do_add -> ArrayList do_do_add (-> MutabelList do_add)
+
+(defmethod add :around ((l list) &rest objs)
+  (if (every #'(lambda (obj) (typep obj (type l))) objs)
+      (call-next-method)
+      (error "Type mismatch with OBJS")))
+(defmethod add ((l list) &rest objs)
+  (declare (ignore l objs))
+  (error "LIST does not implement ADD"))
+
+(defmethod add :around ((l mutable-list) &rest objs)
+  (declare (ignore l))
+  (if (null objs)
+      l
+      (call-next-method)))
+(defmethod add :after ((l mutable-list) &rest objs)
+  (declare (ignore objs))
+  (count-modification l))
+
+(defmethod add ((l array-list-x) &rest objs)
+  (with-slots (store) l
+    (dolist (obj objs l)
+      (vector-push-extend obj store))))
+
+
+  class List < Collection
+    def add(*objs)
+      raise ArgumentError.new("Type mismatch with objs") unless objs.all? {|obj| obj.is_a?(type)}
+
+      do_add(objs)
+    end
+
+    private
+    def do_add(objs)
+      raise NoMethodError, "#{self.class} does not implement do_add()"
+    end
+
+  class MutableList < List
+    private
+    def do_add(objs)
+      unless objs.empty?
+        do_do_add(objs)
+        count_modification                <-- :AFTER method (Have to juggle return value!)
+      end
+    end
+
+    def do_do_add(objs)
+      raise NoMethodError, "#{self.class} does not implement do_do_add()"
+    end
+
+  class ArrayList < MutableList
+    private
+    def do_do_add(objs)
+      @store += objs
+    end
+
+=============================================================================================
+Another execution-order discrepancy:
+CLOS:
+    MUTABLE-COLLECTION-ITERATOR :AROUND -> ITERATOR :AROUND -> ITERATOR primary
+Ruby:
+    Iterator current -> Iterator primary !!
+
+(defmethod current :around ((i iterator))
+  (if (done i)
+      (error "Iteration already finished")
+      (call-next-method)))
+(defmethod current ((i iterator))
+  (with-slots (current) i
+    (funcall current)))
+
+(defmethod current :around ((i mutable-collection-iterator))
+  (check-co-modification i)
+  (call-next-method))
+
+This is broken!
+  class Iterator
+    def current
+      raise StandardError.new("Iteration already finished.") if done?
+                                      <-- Must put (empty) hook method call here????
+                                          Requires forethought about subclass design!!
+      @current.call
+    end
+
+  class MutableCollectionIterator < Iterator
+    def do_current
+      check_comodification
+      super
+    end
+
+Template method must be neutered? Any discrepant code must be in subclass concrete method:
+
+Order is inverted, but this at least functions:
+Iterator current() -> (MutableCollectionIterator "around" ->) MutableCollectionIterator primary
+
+Iterator.prototype.current = function() {
+    if ( this.isDone() ) {
+        throw new Error("Iteration already finished");
+    } else {
+        return this.currentElement();
+    }
+};
+
+Iterator.prototype.currentElement = function() {
+    throw new Error("Iterator does not implement currentElement().");
+};
+    
+MutableCollectionIterator.prototype.currentElement = function() {
+    this.checkComodification();  <-- "Around" method
+
+    return this.curr();       <-- Implies that state is now carried by subclass? (Could be protected
+};                                 fields on superclass.)
+
+Alternatively:
+Iterator "around" -> MutableCollectionIterator "around" -> Iterator primary
+
+Iterator.prototype.current = function() {
+    if ( this.isDone() ) {
+        throw new Error("Iteration already finished");
+    } else {
+        return this.currentElement(); <-- Hook method allows override. Does not need to anticipate future subclasses
+    }
+};
+
+Iterator.prototype.currentElement = function() {
+    return this.curr();
+};
+
+MutableCollectionIterator.prototype.currentElement = function() { <-- Ok to override hook method
+    this.checkComodification();
+
+    return Iterator.prototype.currentElement.call(this); <-- Subclass may call super() as convenience
+                                                             Correct behavior does not hinge on doing so!
+};
+
