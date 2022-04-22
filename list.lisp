@@ -85,6 +85,32 @@
 
 (in-package :containers)
 
+(defclass remote-control ()
+  ((interface :initarg :interface)))
+
+;; (defgeneric press (remote-control button &rest args)
+;;   (:documentation "Press a button on the remote control."))
+;; (defmethod press ((rc remote-control) button &rest args)
+;;   (with-slots (interface) rc
+;;     (apply (gethash button interface) args)))
+
+(defmacro press (rc button &rest args)
+  (let ((interface (gensym)))
+    `(with-slots ((,interface interface)) ,rc
+       (funcall (gethash ',button ,interface) ,@args))))
+
+(defmacro with-remote (slots obj fns)
+  (let ((interface (gensym))
+        (functions (gensym)))
+    `(with-slots ,slots ,obj
+       (let ((,interface (make-hash-table))
+             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
+         (loop for (name fn) on ,functions
+               do (setf (gethash name ,interface) fn))
+         (make-instance 'remote-control :interface ,interface)))) )
+
+
+
 ;; (defvar *sll* (make-instance 'singly-linked-list :type '(satisfies evenp) :fill-elt 0))
 ;; (add *sll* 2 4 6)
 ;; *sll* => #<SINGLY-LINKED-LIST (2 4 6)>
@@ -438,12 +464,30 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
+;; (defmethod list-iterator ((l array-list) &optional (start 0))
+;;   (with-slots (modification-count) l
+;;     (make-instance 'random-access-list-list-iterator
+;;                    :list l
+;;                    :start start
+;;                    :modification-count #'(lambda () modification-count))))
+
 (defmethod list-iterator ((l array-list) &optional (start 0))
-  (with-slots (modification-count) l
+  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
+  (let ((cursor start))
     (make-instance 'random-access-list-list-iterator
-                   :list l
-                   :start start
-                   :modification-count #'(lambda () modification-count))))
+                   :remote-control (with-remote (modification-count) l
+                                     ((modification-count #'(lambda () modification-count))
+                                      (type #'(lambda () (type l)))
+                                      (emptyp #'(lambda () (emptyp l)))
+                                      (current #'(lambda () (nth l cursor)))
+                                      (current-index #'(lambda () cursor))
+                                      (set-current #'(lambda (obj) (setf (nth l cursor) obj)))
+                                      (next #'(lambda () (incf cursor)))
+                                      (previous #'(lambda () (decf cursor)))
+                                      (size #'(lambda () (size l)))
+                                      (add #'(lambda (&rest objs) (apply #'add l objs)))
+                                      (insert #'(lambda (i obj) (insert l i obj)))
+                                      (delete #'(lambda (i) (delete l i)))) ))))
 
 (defmethod contains ((l array-list) obj &key (test #'eql))
   (with-slots (store) l
@@ -551,12 +595,30 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
+;; (defmethod list-iterator ((l array-list-x) &optional (start 0))
+;;   (with-slots (modification-count) l
+;;     (make-instance 'random-access-list-list-iterator
+;;                    :list l
+;;                    :start start
+;;                    :modification-count #'(lambda () modification-count))))
+
 (defmethod list-iterator ((l array-list-x) &optional (start 0))
-  (with-slots (modification-count) l
+  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
+  (let ((cursor start))
     (make-instance 'random-access-list-list-iterator
-                   :list l
-                   :start start
-                   :modification-count #'(lambda () modification-count))))
+                   :remote-control (with-remote (modification-count) l
+                                     ((modification-count #'(lambda () modification-count))
+                                      (type #'(lambda () (type l)))
+                                      (emptyp #'(lambda () (emptyp l)))
+                                      (current #'(lambda () (nth l cursor)))
+                                      (current-index #'(lambda () cursor))
+                                      (set-current #'(lambda (obj) (setf (nth l cursor) obj)))
+                                      (next #'(lambda () (incf cursor)))
+                                      (previous #'(lambda () (decf cursor)))
+                                      (size #'(lambda () (size l)))
+                                      (add #'(lambda (&rest objs) (apply #'add l objs)))
+                                      (insert #'(lambda (i obj) (insert l i obj)))
+                                      (delete #'(lambda (i) (delete l i)))) ))))
 
 (defmethod contains ((l array-list-x) obj &key (test #'eql))
   (with-slots (store offset) l
@@ -655,12 +717,44 @@
                      :current #'(lambda () (first cursor))
                      :advance #'(lambda () (cl:pop cursor)))) ))
 
+;; (defmethod list-iterator ((l singly-linked-list) &optional (start 0))
+;;   (with-slots (modification-count) l
+;;     (make-instance 'singly-linked-list-list-iterator
+;;                    :list l
+;;                    :start start
+;;                    :modification-count #'(lambda () modification-count))))
+
 (defmethod list-iterator ((l singly-linked-list) &optional (start 0))
-  (with-slots (modification-count) l
+  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
+  (let ((index 0)
+        (cursor nil)
+        (history (make-instance 'linked-stack)))
     (make-instance 'singly-linked-list-list-iterator
-                   :list l
-                   :start start
-                   :modification-count #'(lambda () modification-count))))
+                   :remote-control (with-remote (store modification-count) l
+                                     ((modification-count #'(lambda () modification-count))
+                                      (initialize-cursor #'(lambda () (setf cursor store)))
+                                      (type #'(lambda () (type l)))
+                                      (emptyp #'(lambda () (emptyp l)))
+                                      (current #'(lambda () (first cursor)))
+                                      (current-index #'(lambda () index))
+                                      (set-current #'(lambda (obj) (setf (first cursor) obj)))
+                                      (next #'(lambda ()
+                                                (push history cursor)
+                                                (cl:pop cursor)
+                                                (incf index)))
+                                      (previous #'(lambda ()
+                                                    (setf cursor (pop history))
+                                                    (decf index)))
+                                      (has-next #'(lambda ()
+                                                    (not (or (null cursor)
+                                                             (null (rest cursor)))) ))
+                                      (has-previous #'(lambda ()
+                                                        (not (or (null cursor)
+                                                                 (eq cursor store)))) )
+;                                      (size #'(lambda () (size l)))
+                                      (add #'(lambda (&rest objs) (apply #'add l objs)))
+                                      (insert #'(lambda (i obj) (insert l i obj)))
+                                      (delete #'(lambda (i) (delete l i)))) ))))
 
 (defmethod contains ((l singly-linked-list) obj &key (test #'eql))
   (with-slots (store) l
@@ -904,12 +998,45 @@
                      :advance #'(lambda () (cl:pop cursor)))) ))
 
 ;;; ??
+;; (defmethod list-iterator ((l singly-linked-list-x) &optional (start 0))
+;;   (with-slots (modification-count) l
+;;     (make-instance 'singly-linked-list-list-iterator
+;;                    :list l
+;;                    :start start
+;;                    :modification-count #'(lambda () modification-count))))
+
 (defmethod list-iterator ((l singly-linked-list-x) &optional (start 0))
-  (with-slots (modification-count) l
+  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
+  (let ((index 0)
+        (cursor nil)
+        (history (make-instance 'linked-stack)))
     (make-instance 'singly-linked-list-list-iterator
-                   :list l
-                   :start start
-                   :modification-count #'(lambda () modification-count))))
+                   :remote-control (with-remote (front modification-count) l
+                                     ((modification-count #'(lambda () modification-count))
+                                      (initialize-cursor #'(lambda () (setf cursor front)))
+                                      (type #'(lambda () (type l)))
+                                      (emptyp #'(lambda () (emptyp l)))
+                                      (current #'(lambda () (first cursor)))
+                                      (current-index #'(lambda () index))
+                                      (set-current #'(lambda (obj) (setf (first cursor) obj)))
+                                      (next #'(lambda ()
+                                                (push history cursor)
+                                                (cl:pop cursor)
+                                                (incf index)))
+                                      (previous #'(lambda ()
+                                                    (setf cursor (pop history))
+                                                    (decf index)))
+                                      (has-next #'(lambda ()
+                                                    (not (or (null cursor)
+                                                             (null (rest cursor)))) ))
+                                      (has-previous #'(lambda ()
+                                                        (not (or (null cursor)
+                                                                 (eq cursor front)))) )
+;                                      (size #'(lambda () (size l)))
+                                      (add #'(lambda (&rest objs) (apply #'add l objs)))
+                                      (insert #'(lambda (i obj) (insert l i obj)))
+                                      (delete #'(lambda (i) (delete l i)))) ))))
+
 
 (defmethod contains ((l singly-linked-list-x) obj &key (test #'eql))
   (with-slots (front) l
@@ -2001,12 +2128,30 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
+;; (defmethod list-iterator ((l hash-table-list) &optional (start 0))
+;;   (with-slots (modification-count) l
+;;     (make-instance 'random-access-list-list-iterator
+;;                    :list l
+;;                    :start start
+;;                    :modification-count #'(lambda () modification-count))))
+
 (defmethod list-iterator ((l hash-table-list) &optional (start 0))
-  (with-slots (modification-count) l
+  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
+  (let ((cursor start))
     (make-instance 'random-access-list-list-iterator
-                   :list l
-                   :start start
-                   :modification-count #'(lambda () modification-count))))
+                   :remote-control (with-remote (modification-count) l
+                                     ((modification-count #'(lambda () modification-count))
+                                      (type #'(lambda () (type l)))
+                                      (emptyp #'(lambda () (emptyp l)))
+                                      (current #'(lambda () (nth l cursor)))
+                                      (current-index #'(lambda () cursor))
+                                      (set-current #'(lambda (obj) (setf (nth l cursor) obj)))
+                                      (next #'(lambda () (incf cursor)))
+                                      (previous #'(lambda () (decf cursor)))
+                                      (size #'(lambda () (size l)))
+                                      (add #'(lambda (&rest objs) (apply #'add l objs)))
+                                      (insert #'(lambda (i obj) (insert l i obj)))
+                                      (delete #'(lambda (i) (delete l i)))) ))))
 
 (defmethod contains ((l hash-table-list) obj &key (test #'eql))
   (with-slots (store) l
@@ -2547,16 +2692,16 @@
 ;;;    RESET method?? (CLEAR?)
 ;;;
 (defclass list-iterator ()
-  ((list :initarg :list))
+  ((remote-control :initarg :remote-control))
   (:documentation "External iterator for a list. May traverse in either direction."))
 
 (defmethod type ((i list-iterator))
-  (with-slots (list) i
-    (type list)))
+  (with-slots (remote-control) i
+    (press remote-control type)))
 
 (defmethod emptyp ((i list-iterator))
-  (with-slots (list) i
-    (emptyp list)))
+  (with-slots (remote-control) i
+    (press remote-control emptyp)))
 
 ;;
 ;;    Eliminate CURRENT in favor of NEXT/PREVIOUS? (Both move cursor and return elt. Error if at end?)
@@ -2656,26 +2801,87 @@
   (declare (ignore i obj))
   (error "LIST-ITERATOR does not implement ADD-AFTER"))
 
+;; (defclass list-iterator-remote-control ()
+;;   ((type :initarg :type)
+;;    (emptyp :initarg :emptyp)))
+
+;; (defmethod type ((rc list-iterator-remote-control))
+;;   (with-slots (type) rc
+;;     (funcall type)))
+
+;; (defmethod emptyp ((rc list-iterator-remote-control))
+;;   (with-slots (emptyp) rc
+;;     (funcall emptyp)))
+
+;; (defclass mutable-list-iterator-remote-control (list-iterator-remote-control)
+;;   ((modification-count :initarg :modification-count)))
+
+;; (defmethod modification-count ((rc mutable-list-iterator-remote-control))
+;;   (with-slots (modification-count) rc
+;;     (funcall modification-count)))
+
+;; (defclass random-access-list-list-iterator-remote-control (mutable-list-iterator-remote-control)
+;;   ((initialize-cursor :initarg :initialize-cursor)
+;;    (size :initarg :size)
+;;    (current :initarg :current)
+;;    (set-current :initarg :set-current)
+;;    (delete :initarg :delete)
+;;    (insert :initarg :insert)
+;;    (add :initarg :add)))
+
+   ;;   (init?) sll-x
+   ;;   (has-previous)
+   ;; (delete-node)
+   ;; (delete-child)
+   ;; (insert-before)
+   ;; (add)
+   ;; (insert-after)
+
+   ;; (dcursor)
+
+(defclass remote-control ()
+  ((interface :initarg :interface)))
+
+;; (defgeneric press (remote-control button &rest args)
+;;   (:documentation "Press a button on the remote control."))
+;; (defmethod press ((rc remote-control) button &rest args)
+;;   (with-slots (interface) rc
+;;     (apply (gethash button interface) args)))
+
+(defmacro press (rc button &rest args)
+  (let ((interface (gensym)))
+    `(with-slots ((,interface interface)) ,rc
+       (funcall (gethash ',button ,interface) ,@args))))
+
+(defmacro with-remote (slots obj fns)
+  (let ((interface (gensym))
+        (functions (gensym)))
+    `(with-slots ,slots ,obj
+       (let ((,interface (make-hash-table))
+             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
+         (loop for (name fn) on ,functions
+               do (setf (gethash name ,interface) fn))
+         (make-instance 'remote-control :interface ,interface)))) )
+
 ;;;
 ;;;    MUTABLE-LIST-LIST-ITERATOR
 ;;;    
 (defclass mutable-list-list-iterator (list-iterator)
-  ((modification-count :initarg :modification-count :documentation "A function that produces the modification count for the collection.")
-   (expected-modification-count :type integer))
+  ((expected-modification-count :type integer))
   (:documentation "External iterator for a mutable list. May traverse in either direction."))
 
 (defmethod initialize-instance :after ((i mutable-list-list-iterator) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (modification-count expected-modification-count) i
-    (setf expected-modification-count (funcall modification-count))))
+  (with-slots (remote-control expected-modification-count) i
+    (setf expected-modification-count (press remote-control modification-count))))
 
 (defmethod count-modification ((i mutable-list-list-iterator))
   (with-slots (expected-modification-count) i
     (incf expected-modification-count)))
 
 (defmethod co-modified ((i mutable-list-list-iterator))
-  (with-slots (modification-count expected-modification-count) i
-    (/= expected-modification-count (funcall modification-count))))
+  (with-slots (remote-control expected-modification-count) i
+    (/= expected-modification-count (press remote-control modification-count))))
 
 ;;;
 ;;;    Lots of redundant checks! E.g., NEXT -> HAS-NEXT -> CURRENT
@@ -2771,66 +2977,65 @@
 ;;;
 ;;;    RANDOM-ACCESS-LIST-LIST-ITERATOR
 ;;;
-(defclass random-access-list-list-iterator (mutable-list-list-iterator)
-  ((cursor :type integer)))
-
-(defmethod initialize-instance :after ((i random-access-list-list-iterator) &rest initargs &key (start 0))
-  (declare (ignore initargs))
-  (with-slots (list cursor) i
-    (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
-    (setf cursor start)))
+(defclass random-access-list-list-iterator (mutable-list-list-iterator) ())
 
 (defmethod current ((i random-access-list-list-iterator))
-  (with-slots (list cursor) i
-    (nth list cursor)))
+  (with-slots (remote-control) i
+    (press remote-control current)))
 
 (defmethod current-index ((i random-access-list-list-iterator))
-  (slot-value i 'cursor))
+  (with-slots (remote-control) i
+    (press remote-control current-index)))
 
 (defmethod (setf current) (obj (i random-access-list-list-iterator))
-  (with-slots (list) i
-    (setf (nth list (current-index i)) obj)))
+  (with-slots (remote-control) i
+    (press remote-control set-current obj)))
 
 (defmethod next ((i random-access-list-list-iterator))
-  (with-slots (cursor) i
+  (with-slots (remote-control) i
     (cond ((has-next i)
-           (incf cursor)
+           (press remote-control next)
            (current i))
           (t nil))))
 
 (defmethod previous ((i random-access-list-list-iterator))
-  (with-slots (cursor) i
+  (with-slots (remote-control) i
     (cond ((has-previous i)
-           (decf cursor)
+           (press remote-control previous)
            (current i))
           (t nil))))
 
 (defmethod has-next ((i random-access-list-list-iterator))
-  (with-slots (list cursor) i
-    (< cursor (1- (size list)))) )
+  (with-slots (remote-control) i
+    (let ((cursor (press remote-control current-index))
+          (size (press remote-control size)))
+      (< cursor (1- size)))) )
 
 (defmethod has-previous ((i random-access-list-list-iterator))
-  (with-slots (cursor) i
-    (> cursor 0)))
+  (with-slots (remote-control) i
+    (let ((cursor (press remote-control current-index)))
+      (> cursor 0))))
 
 (defmethod remove ((i random-access-list-list-iterator))
-  (with-slots (list cursor) i
-    (let ((index cursor))
+  (with-slots (remote-control) i
+    (let ((index (press remote-control current-index)))
       (when (and (has-previous i)
                  (not (has-next i)))
-        (decf cursor))
-      (delete list index))))
+        (press remote-control previous))
+      (press remote-control delete index))))
 
 (defmethod add-before ((i random-access-list-list-iterator) obj)
-  (with-slots (list cursor) i
-    (cond ((emptyp i) (add list obj))
-          (t (insert list cursor obj)
-             (incf cursor)))) )
+  (with-slots (remote-control) i
+    (let ((cursor (press remote-control current-index)))
+      (cond ((emptyp i) (press remote-control add obj))
+            (t (press remote-control insert cursor obj)
+               (press remote-control next)))) ))
 
 (defmethod add-after ((i random-access-list-list-iterator) obj)
-  (with-slots (list cursor) i
-    (cond ((emptyp i) (add list obj))
-          (t (insert list (1+ cursor) obj)))) )
+  (with-slots (remote-control) i
+    (let ((cursor (press remote-control current-index)))
+      (cond ((emptyp i) (press remote-control add obj))
+            (t (press remote-control insert (1+ cursor) obj)))) ))
 
 ;;;
 ;;;    SINGLY-LINKED-LIST-LIST-ITERATOR
@@ -2842,10 +3047,7 @@
 ;;;    once the list is populated. It is assumed that the cursor will spring to life at index 0, e.g., calling
 ;;;    REMOVE will remove the 0th element.
 ;;;    
-(defclass singly-linked-list-list-iterator (mutable-list-list-iterator)
-  ((index :type integer :initform 0)
-   (cursor :type (or null cons))
-   (history :initform (make-instance 'linked-stack))))
+(defclass singly-linked-list-list-iterator (mutable-list-list-iterator) ())
 
 ;;;
 ;;;    ???
@@ -2854,10 +3056,10 @@
 ;;;    
 (defmethod initialize-instance :after ((i singly-linked-list-list-iterator) &rest initargs &key (start 0))
   (declare (ignore initargs))
-  (with-slots (list index cursor) i
-    (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
+;  (with-slots (list index cursor) i
+;    (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
     (initialize-cursor i)
-    (loop repeat start do (next i)))) ; Build initial history
+    (loop repeat start do (next i))) ; Build initial history
 
 ;;;
 ;;;    CURSOR may be detached when:
@@ -2865,27 +3067,24 @@
 ;;;    2. List becomes empty
 ;;;    
 (defun initialize-cursor (list-iterator)
-  (with-slots (list cursor) list-iterator
-    (if (slot-exists-p list 'store) ; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	(setf cursor (slot-value list 'store))
-	(setf cursor (slot-value list 'front)))) )
-;    (setf cursor (slot-value list 'store))))
-;    (setf cursor (store list))))
-  
+  (with-slots (remote-control) list-iterator
+    (press remote-control initialize-cursor)))
+
 ;; (defmethod current :before ((i singly-linked-list-list-iterator))
 ;;   (with-slots (cursor) i
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod current ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (first cursor)))
+  (with-slots (remote-control) i
+    (press remote-control current)))
 
 ;; (defmethod current-index :before ((i singly-linked-list-list-iterator))
 ;;   (with-slots (cursor) i
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod current-index ((i singly-linked-list-list-iterator))
-  (slot-value i 'index))
+  (with-slots (remote-control) i
+    (press remote-control current-index)))
 
 ;; (defmethod (setf current) :before (obj (i singly-linked-list-list-iterator))
 ;;   (declare (ignore obj))
@@ -2893,8 +3092,8 @@
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod (setf current) (obj (i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (setf (first cursor) obj)))
+  (with-slots (remote-control) i
+    (press remote-control set-current obj)))
 
 ;;;
 ;;;    CURSOR is NIL but STORE is not?? (List iterator created with empty list?)
@@ -2904,11 +3103,9 @@
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod next ((i singly-linked-list-list-iterator))
-  (with-slots (cursor index history) i
+  (with-slots (remote-control) i
     (cond ((has-next i)
-           (push history cursor)
-           (cl:pop cursor)
-           (incf index)
+           (press remote-control next)
            (current i))
           (t nil))))
 
@@ -2932,10 +3129,9 @@
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod previous ((i singly-linked-list-list-iterator))
-  (with-slots (cursor index history) i
+  (with-slots (remote-control) i
     (cond ((has-previous i)
-           (setf cursor (pop history))
-           (decf index)
+           (press remote-control previous)
            (current i))
           (t nil))))
 
@@ -2944,21 +3140,16 @@
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod has-next ((i singly-linked-list-list-iterator))
-  (with-slots (cursor) i
-    (not (or (null cursor)
-             (null (rest cursor)))) ))
+  (with-slots (remote-control) i
+    (press remote-control has-next)))
 
 ;; (defmethod has-previous :before ((i singly-linked-list-list-iterator))
 ;;   (with-slots (cursor) i
 ;;     (when (null cursor)
 ;;       (initialize-cursor i))))
 (defmethod has-previous ((i singly-linked-list-list-iterator))
-  (with-slots (list cursor) i
-    (if (slot-exists-p list 'store) ; !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	(not (or (null cursor) ; This is actually redundant...
-                 (eq cursor (slot-value list 'store))))
-	(not (or (null cursor)
-                 (eq cursor (slot-value list 'front)))) )))
+  (with-slots (remote-control) i
+    (press remote-control has-previous)))
 
 ;; (defmethod remove :before ((i singly-linked-list-list-iterator))
 ;;   (with-slots (cursor) i
