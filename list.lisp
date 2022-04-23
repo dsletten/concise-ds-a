@@ -1212,21 +1212,20 @@
 (defclass dcursor ()
   ((node :type (or null dcons))
    (index :initform 0)
-   (head-node :initarg :head-node :documentation "A function that returns the node at front of list.")
-   (size :initarg :size :documentation "A function that returns the size of the associated list."))
+   (remote-control :initarg :remote-control))
   (:documentation "Cursor for circular doubly-linked list."))
 
 (defmethod initialize-instance :after ((c dcursor) &rest initargs)
   (declare (ignore initargs))
-  (with-slots (node head-node) c
-    (setf node (funcall head-node)))) ; Empty LIST => (null node)
+  (with-slots (node remote-control) c
+    (setf node (press remote-control head-node)))) ; Empty LIST => (null node)
 
 (defun initializedp (cursor)
   (not (null (slot-value cursor 'node))))
 
 (defun reset (cursor)
-  (with-slots (node index head-node) cursor
-    (setf node (funcall head-node)
+  (with-slots (node index remote-control) cursor
+    (setf node (press remote-control head-node)
           index 0)))
 
 (defun at-start-p (cursor)
@@ -1234,9 +1233,9 @@
       (zerop (slot-value cursor 'index))))
 
 (defun at-end-p (cursor)
-  (with-slots (index size) cursor
+  (with-slots (index remote-control) cursor
     (or (not (initializedp cursor))
-        (= index (1- (funcall size)))) ))
+        (= index (1- (press remote-control size)))) ))
 
 (defgeneric advance (cursor &optional step)
   (:documentation "Advance the cursor to the next node or ahead multiple nodes."))
@@ -1247,11 +1246,11 @@
       (error "Cursor has not been initialized")))
 (defmethod advance ((c dcursor) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size) c
+  (with-slots (node index remote-control) c
     (loop repeat step
           do (incf index)
              (setf node (next node)))
-    (setf index (mod index (funcall size)))) )
+    (setf index (mod index (press remote-control size)))) )
 
 (defgeneric rewind (cursor &optional step)
   (:documentation "Rewind the cursor to the previous node or back multiple nodes."))
@@ -1262,11 +1261,11 @@
       (error "Cursor has not been initialized")))
 (defmethod rewind ((c dcursor) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size) c
+  (with-slots (node index remote-control) c
     (loop repeat step
           do (decf index)
              (setf node (previous node)))
-    (setf index (mod index (funcall size)))) )
+    (setf index (mod index (press remote-control size)))) )
 
 ;;;
 ;;;    This can allow DCURSOR to get out of sync!
@@ -1589,8 +1588,10 @@
   (:documentation "Circular doubly-linked list."))
 
 (defun setup-cursor (dll)
-  (with-slots (store count cursor) dll
-    (make-instance 'dcursor :head-node #'(lambda () store) :size #'(lambda () count))))
+  (make-instance 'dcursor
+                 :remote-control (with-remote (store count) dll
+                                   ((head-node #'(lambda () store))
+                                    (size #'(lambda () count)))) ))
 
 (defmethod initialize-instance :after ((l doubly-linked-list) &rest initargs)
   (declare (ignore initargs))
