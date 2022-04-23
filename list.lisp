@@ -464,13 +464,6 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
-;; (defmethod list-iterator ((l array-list) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
-
 (defmethod list-iterator ((l array-list) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
@@ -585,13 +578,6 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
-;; (defmethod list-iterator ((l array-list-x) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
-
 (defmethod list-iterator ((l array-list-x) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
@@ -696,13 +682,6 @@
                      :done #'(lambda () (null cursor))
                      :current #'(lambda () (first cursor))
                      :advance #'(lambda () (cl:pop cursor)))) ))
-
-;; (defmethod list-iterator ((l singly-linked-list) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'singly-linked-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
 
 (defmethod list-iterator ((l singly-linked-list) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
@@ -953,14 +932,6 @@
                      :done #'(lambda () (null cursor))
                      :current #'(lambda () (first cursor))
                      :advance #'(lambda () (cl:pop cursor)))) ))
-
-;;; ??
-;; (defmethod list-iterator ((l singly-linked-list-x) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'singly-linked-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
 
 (defmethod list-iterator ((l singly-linked-list-x) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
@@ -1662,13 +1633,6 @@
                                   (advance cursor)
                                   (setf sealed-for-your-protection nil)))) ))
 
-;; (defmethod list-iterator ((l doubly-linked-list) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'doubly-linked-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
-
 (defmethod list-iterator ((l doubly-linked-list) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'doubly-linked-list-list-iterator
@@ -2075,13 +2039,6 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
-;; (defmethod list-iterator ((l hash-table-list) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
-
 (defmethod list-iterator ((l hash-table-list) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
@@ -2228,13 +2185,6 @@
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
 
-;; (defmethod list-iterator ((l hash-table-list-x) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
-
 (defmethod list-iterator ((l hash-table-list-x) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
@@ -2369,13 +2319,6 @@
                                (= cursor (size l)))
                      :current #'(lambda () (nth l cursor))
                      :advance #'(lambda () (incf cursor)))) ))
-
-;; (defmethod list-iterator ((l hash-table-list-z) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
 
 (defmethod list-iterator ((l hash-table-list-z) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
@@ -2536,10 +2479,6 @@
                  :current #'(lambda () (nth l 0))
                  :advance #'(lambda () (iterator (delete l 0)))) ) ; Recursive call!
                  
-;; (defmethod list-iterator ((l persistent-list) &optional (start 0))
-;; ;  (make-instance 'persistent-list-list-iterator :list l :cursor (slot-value l 'store) :start start))
-;;   (make-instance 'persistent-list-list-iterator :list l :start start))
-
 (defmethod list-iterator ((l persistent-list) &optional (start 0))
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'persistent-list-list-iterator
@@ -2953,11 +2892,6 @@
    (cursor :type (or null cons))
    (history :initform (make-instance 'linked-stack))))
 
-;;;
-;;;    ???
-;;;    ITERATOR - initialize from :LIST
-;;;    LIST-ITERATOR - initialize from slot LIST
-;;;    
 (defmethod initialize-instance :after ((i singly-linked-list-list-iterator) &rest initargs &key (start 0))
   (declare (ignore initargs))
   (with-slots (list) i
@@ -2974,37 +2908,17 @@
   (with-slots (remote-control cursor) list-iterator
     (setf cursor (press remote-control head-node))))
 
-;; (defmethod current :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod current ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (first cursor)))
 
-;; (defmethod current-index :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod current-index ((i singly-linked-list-list-iterator))
   (slot-value i 'index))
 
-;; (defmethod (setf current) :before (obj (i singly-linked-list-list-iterator))
-;;   (declare (ignore obj))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod (setf current) (obj (i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (setf (first cursor) obj)))
 
-;;;
-;;;    CURSOR is NIL but STORE is not?? (List iterator created with empty list?)
-;;;    
-;; (defmethod next :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod next ((i singly-linked-list-list-iterator))
   (with-slots (cursor index history) i
     (cond ((has-next i)
@@ -3029,10 +2943,6 @@
 ;;              (current i)))
 ;;           (t nil))))
 
-;; (defmethod previous :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod previous ((i singly-linked-list-list-iterator))
   (with-slots (cursor index history) i
     (cond ((has-previous i)
@@ -3041,28 +2951,16 @@
            (current i))
           (t nil))))
 
-;; (defmethod has-next :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod has-next ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (or (null cursor)
              (null (rest cursor)))) ))
 
-;; (defmethod has-previous :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod has-previous ((i singly-linked-list-list-iterator))
   (with-slots (list remote-control cursor) i
     (not (or (null cursor)
              (eq cursor (press remote-control head-node)))) ))
 
-;; (defmethod remove :before ((i singly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (when (null cursor)
-;;       (initialize-cursor i))))
 (defmethod remove ((i singly-linked-list-list-iterator))
   (with-slots (list cursor index history) i
     (cond ((zerop index)
@@ -3105,52 +3003,27 @@
     (unless (zerop start)
       (advance cursor start))))
 
-;; (defmethod current :before ((i doubly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod current ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (content (slot-value cursor 'node)))) ; ???
 
-;; (defmethod current-index :before ((i doubly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod current-index ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (slot-value cursor 'index))) ; ???
 
-;; (defmethod (setf current) :before (obj (i doubly-linked-list-list-iterator))
-;;   (declare (ignore obj))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod (setf current) (obj (i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (with-slots (node) cursor ; ???
       (setf (content node) obj))))
 
-;; (defmethod has-next :before ((i doubly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod has-next ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (at-end-p cursor))))
 
-;; (defmethod has-previous :before ((i doubly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod has-previous ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (at-start-p cursor))))
 
-;; (defmethod next :before ((i doubly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod next ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (cond ((has-next i)
@@ -3158,10 +3031,6 @@
            (current i))
           (t nil))))
 
-;; (defmethod previous :before ((i doubly-linked-list-list-iterator))
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
 (defmethod previous ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
     (cond ((has-previous i)
@@ -3169,12 +3038,6 @@
            (current i))
           (t nil))))
 
-;; (defmethod remove :before ((i doubly-linked-list-list-iterator)) ; Is this necessary? :AROUND  catches empty list 
-;;   (with-slots (cursor) i
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
-;;     ;; (when (null cursor)
-;;     ;;   (initialize-cursor i))))
 (defmethod remove ((i doubly-linked-list-list-iterator))
   (with-slots (list cursor) i
     (with-slots (index node) cursor ; ???
