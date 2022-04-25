@@ -465,7 +465,6 @@
                      :advance #'(lambda () (incf cursor)))) ))
 
 (defmethod list-iterator ((l array-list) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
                  :list l
                  :start start
@@ -579,7 +578,6 @@
                      :advance #'(lambda () (incf cursor)))) ))
 
 (defmethod list-iterator ((l array-list-x) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
                  :list l
                  :start start
@@ -684,7 +682,6 @@
                      :advance #'(lambda () (cl:pop cursor)))) ))
 
 (defmethod list-iterator ((l singly-linked-list) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'singly-linked-list-list-iterator
                  :list l
                  :start start
@@ -934,7 +931,6 @@
                      :advance #'(lambda () (cl:pop cursor)))) ))
 
 (defmethod list-iterator ((l singly-linked-list-x) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'singly-linked-list-list-iterator
                  :list l
                  :start start
@@ -1268,10 +1264,10 @@
     (setf index (mod index (press remote-control size)))) )
 
 ;;;
-;;;    This can allow DCURSOR to get out of sync!
+;;;    These can allow DCURSOR to get out of sync!
 ;;;    
 (defgeneric bump (cursor)
-  (:documentation "Nudge cursor ahead by one node when removing a node."))
+  (:documentation "Bump cursor ahead by one node without updating index."))
 (defmethod bump :around ((c dcursor))
   (if (initializedp c)
       (call-next-method)
@@ -1279,6 +1275,16 @@
 (defmethod bump ((c dcursor))
   (with-slots (node) c
     (setf node (next node))))
+
+(defgeneric nudge (cursor)
+  (:documentation "Nudge index ahead by one without adjusting node."))
+(defmethod nudge :around ((c dcursor))
+  (if (initializedp c)
+      (call-next-method)
+      (error "Cursor has not been initialized")))
+(defmethod nudge ((c dcursor))
+  (with-slots (index) c
+    (incf index)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -1587,16 +1593,37 @@
    (cursor :documentation "Floating cursor. May simplify access based on previous access."))
   (:documentation "Circular doubly-linked list."))
 
-(defun setup-cursor (dll)
-  (make-instance 'dcursor
-                 :remote-control (with-remote (store count) dll
-                                   ((head-node #'(lambda () store))
-                                    (size #'(lambda () count)))) ))
-
-(defmethod initialize-instance :after ((l doubly-linked-list) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (store count cursor) l
-    (setf cursor (setup-cursor l))))
+(flet ((setup-cursor (dll)
+         (make-instance 'dcursor
+                        :remote-control (with-remote (store count) dll
+                                          ((head-node #'(lambda () store))
+                                           (size #'(lambda () count)))) )))
+  (defmethod initialize-instance :after ((l doubly-linked-list) &rest initargs)
+    (declare (ignore initargs))
+    (with-slots (cursor) l
+      (setf cursor (setup-cursor l))))
+  (defmethod iterator ((l doubly-linked-list))
+    (with-slots (modification-count) l
+      (let ((cursor (setup-cursor l))
+            (sealed-for-your-protection t))
+        (make-instance 'mutable-collection-iterator
+                       :modification-count #'(lambda () modification-count)
+                       :done #'(lambda ()
+                                 (or (not (initializedp cursor)) ; ?? Empty list??
+                                     (and (not sealed-for-your-protection) (at-start-p cursor))))
+                       :current #'(lambda ()
+                                    (with-slots (node) cursor ; ???
+                                      (content node)))
+                       :advance #'(lambda ()
+                                    (advance cursor)
+                                    (setf sealed-for-your-protection nil)))) ))
+  (defmethod list-iterator ((l doubly-linked-list) &optional (start 0))
+    (make-instance 'doubly-linked-list-list-iterator
+                   :list l
+                   :start start
+                   :remote-control (with-remote (modification-count) l
+                                     ((modification-count #'(lambda () modification-count))
+                                      (initialize #'(lambda () (setup-cursor l)))) ))))
 
 (defun make-doubly-linked-list (&key (type t) (fill-elt nil))
   (make-instance 'doubly-linked-list :type type :fill-elt fill-elt))
@@ -1618,31 +1645,6 @@
             count 0)
       (reset cursor))))
 
-(defmethod iterator ((l doubly-linked-list))
-  (with-slots (modification-count) l
-    (let ((cursor (setup-cursor l))
-          (sealed-for-your-protection t))
-      (make-instance 'mutable-collection-iterator
-                     :modification-count #'(lambda () modification-count)
-                     :done #'(lambda ()
-                               (or (not (initializedp cursor)) ; ?? Empty list??
-                                   (and (not sealed-for-your-protection) (at-start-p cursor))))
-                     :current #'(lambda ()
-                                  (with-slots (node) cursor ; ???
-                                    (content node)))
-                     :advance #'(lambda ()
-                                  (advance cursor)
-                                  (setf sealed-for-your-protection nil)))) ))
-
-(defmethod list-iterator ((l doubly-linked-list) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
-  (make-instance 'doubly-linked-list-list-iterator
-                 :list l
-                 :start start
-                 :remote-control (with-remote (store modification-count) l
-                                   ((modification-count #'(lambda () modification-count))
-                                    (head-node #'(lambda () store))
-                                    (initialize #'(lambda () (setup-cursor l)))) )))
 
 ;; (defmethod contains ((l doubly-linked-list) obj &key (test #'eql))
 ;;   (loop with iterator = (iterator l)
@@ -1905,9 +1907,6 @@
 ;;;    Furthermore, we don't know the index of the NODE. If DCURSOR's index is before NODE, then it
 ;;;    need not be adjusted. If equal or after, it must be incremented. But we can't tell...
 ;;;    
-    ;; (with-slots (index) cursor
-    ;;   (incf index)))) ; Anti-BUMP??
-
 (defmethod splice-before ((node dcons) obj)
   (let ((new-dcons (make-instance 'dcons :content obj)))
     (dlink (previous node) new-dcons)
@@ -2041,7 +2040,6 @@
                      :advance #'(lambda () (incf cursor)))) ))
 
 (defmethod list-iterator ((l hash-table-list) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
                  :list l
                  :start start
@@ -2187,7 +2185,6 @@
                      :advance #'(lambda () (incf cursor)))) ))
 
 (defmethod list-iterator ((l hash-table-list-x) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
                  :list l
                  :start start
@@ -2322,7 +2319,6 @@
                      :advance #'(lambda () (incf cursor)))) ))
 
 (defmethod list-iterator ((l hash-table-list-z) &optional (start 0))
-  (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'random-access-list-list-iterator
                  :list l
                  :start start
@@ -2481,6 +2477,7 @@
                  :advance #'(lambda () (iterator (delete l 0)))) ) ; Recursive call!
                  
 (defmethod list-iterator ((l persistent-list) &optional (start 0))
+  ;;    Does this have to be here??? 见 MAKE-INSTANCE :AROUND
   (assert (typep start `(integer 0 (,(max (size l) 1)))) () "Invalid index: ~D" start)
   (make-instance 'persistent-list-list-iterator
                  :list l
@@ -3010,7 +3007,7 @@
 
 (defmethod current-index ((i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
-    (slot-value cursor 'index))) ; ???
+    (slot-value cursor 'index))) ; ??? <-----------------------
 
 (defmethod (setf current) (obj (i doubly-linked-list-list-iterator))
   (with-slots (cursor) i
@@ -3055,9 +3052,9 @@
     (cond ((emptyp i)
            (add list obj)
            (reset cursor))
-          (t (with-slots (index node) cursor ; ???
+          (t (with-slots (node) cursor
                (insert-before list node obj)
-               (incf index)))) ))
+               (nudge cursor)))) ))
 
 (defmethod add-after ((i doubly-linked-list-list-iterator) obj)
   (with-slots (list cursor) i
@@ -3070,6 +3067,7 @@
 ;;;
 ;;;    PERSISTENT-LIST-LIST-ITERATOR
 ;;;    - Must be able to retrieve associated list after structural modifications...
+;;;      "Modification" of list iterator creates new list iterator associated with new list!
 ;;;    - NEXT/PREVIOUS should return secondary value consisting of list elt??
 ;;;
 ;; (defclass persistent-list-list-iterator (list-iterator)
@@ -3082,8 +3080,8 @@
 (let ((empty-history (make-instance 'persistent-stack :type 'cons)))
   (defclass persistent-list-list-iterator (list-iterator)
 ;    ((list :initarg :list :reader list) ; ????????????????? <-- This is #'list?!
-    ((list :initarg :list)
-     (index :type integer :initform 0)
+;    ((list :initarg :list)
+    ((index :type integer :initform 0)
      (cursor :type cl:list)
      (history :initform empty-history))))
 
@@ -3107,7 +3105,8 @@
 ;;;    - Improve efficiency of creating list iterator (less garbage)
 ;;;    - Improve efficiency of creating history stack (less garbage). Provide content directly
 ;;;    - START too big?!
-;;;    
+;;;        (assert (typep start `(integer 0 (,(max (size list) 1)))) () "Invalid index: ~D" start)
+;;;
 (defmethod make-instance :around ((class (eql (find-class 'persistent-list-list-iterator))) &rest initargs &key (start 0))
   (cond ((minusp start) (error "Invalid index: ~D" start))
         ((zerop start)

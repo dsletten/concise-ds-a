@@ -158,6 +158,8 @@
 ;;;    - Binary tree: push parent
 ;;;    - Arbitrary tree: push parent + remaining children
 ;;;    
+;;;    This is a klunky early version of REMOTE-CONTROL??
+;;;    
 (defclass iterator ()
   ((done :initarg :done :documentation "A function that determines whether traversal is complete.")
    (current :initarg :current :documentation "A function that yields the current element of the collection.")
