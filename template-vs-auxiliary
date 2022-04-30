@@ -3,9 +3,22 @@ Template method design pattern vs. Auxiliary methods 220416
 - Not equivalent in the end
 - Template method -> Hollywood Principle
   Inversion of subclass -> superclass invocation order
-  - Insisting on normal order of invocation requires:
+  - Insisting on normal order of invocation requires:    <-- But is this necessary/desirable??
     - Unreasonable forethought in designing superclass or
     - Risky reliance on subclass calling super() (This isn't really Template anymore?)
+
+
+Iterator case:
+2 possible design choices
+
+1. Iterator defines interface and templates (e.g., next()).
+   Subclasses define concrete methods (e.g., nextElement())
+   - Harder to share code without multiplying subclasses?
+   - Harder to anticipate future needs?
+2. Iterator (simply?) defines interface, provided with slots to hold closures that implement specific behaviors.
+   No subclasses exist (besides MutableCollectionIterator, for example).
+   - User can adapt behavior as needed.
+
 =============================================================================================
 Simple case-- Single :AROUND method
 - :AROUND method is always invoked. Subclass cannot circumvent/override.

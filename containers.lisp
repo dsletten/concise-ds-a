@@ -142,6 +142,33 @@
     (incf modification-count)))
 
 ;;;
+;;;    REMOTE-CONTROL
+;;;    
+(defclass remote-control ()
+  ((interface :initarg :interface)))
+
+;; (defgeneric press (remote-control button &rest args)
+;;   (:documentation "Press a button on the remote control."))
+;; (defmethod press ((rc remote-control) button &rest args)
+;;   (with-slots (interface) rc
+;;     (apply (gethash button interface) args)))
+
+(defmacro press (rc button &rest args)
+  (let ((interface (gensym)))
+    `(with-slots ((,interface interface)) ,rc
+       (funcall (gethash ',button ,interface) ,@args))))
+
+(defmacro with-remote (slots obj fns)
+  (let ((interface (gensym))
+        (functions (gensym)))
+    `(with-slots ,slots ,obj
+       (let ((,interface (make-hash-table))
+             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
+         (loop for (name fn) on ,functions
+               do (setf (gethash name ,interface) fn))
+         (make-instance 'remote-control :interface ,interface)))) )
+
+;;;
 ;;;    ITERATOR
 ;;;
 ;;;    Design conflict

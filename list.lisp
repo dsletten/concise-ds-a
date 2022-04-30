@@ -85,29 +85,48 @@
 
 (in-package :containers)
 
-(defclass remote-control ()
-  ((interface :initarg :interface)))
+;;;
+;;;    Where do these belong?
+;;;
 
-;; (defgeneric press (remote-control button &rest args)
-;;   (:documentation "Press a button on the remote control."))
-;; (defmethod press ((rc remote-control) button &rest args)
-;;   (with-slots (interface) rc
-;;     (apply (gethash button interface) args)))
+;;;
+;;;    Make copy of current node. Surgically update current node to
+;;;    become "previous" node in place.
+;;;    
+(defgeneric splice-before (node obj)
+  (:documentation "Splice OBJ into chain of nodes before NODE."))
+(defmethod splice-before ((node cons) obj)
+  (let ((copy (cons (first node) (rest node))))
+    (setf (first node) obj
+          (rest node) copy)))
 
-(defmacro press (rc button &rest args)
-  (let ((interface (gensym)))
-    `(with-slots ((,interface interface)) ,rc
-       (funcall (gethash ',button ,interface) ,@args))))
+(defgeneric splice-after (node obj)
+  (:documentation "Splice OBJ into chain of nodes after NODE."))
+(defmethod splice-after ((node cons) obj)
+  (let ((tail (cons obj (rest node))))
+    (setf (rest node) tail)))
 
-(defmacro with-remote (slots obj fns)
-  (let ((interface (gensym))
-        (functions (gensym)))
-    `(with-slots ,slots ,obj
-       (let ((,interface (make-hash-table))
-             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
-         (loop for (name fn) on ,functions
-               do (setf (gethash name ,interface) fn))
-         (make-instance 'remote-control :interface ,interface)))) )
+(defgeneric excise-node (doomed)
+  (:documentation "Surgically remove the doomed node from the list."))
+(defmethod excise-node ((doomed cons))
+  (let ((content (first doomed))
+        (saved (rest doomed)))
+    (prog1 content
+      (cond ((null saved) ; Can't delete last node
+             (error "Target node must have non-nil next node"))
+            (t (setf (first doomed) (first saved)
+                     (rest doomed) (rest saved)))) )))
+
+(defgeneric excise-child (parent)
+  (:documentation "Surgically remove the child of the given node from the list."))
+(defmethod excise-child ((parent cons))
+  (let ((child (rest parent)))
+    (if (null child)
+        (error "Parent must have child node")
+        (prog1 (first child)
+          (setf (rest parent) (rest child)))) ))
+
+
 
 
 
@@ -738,17 +757,6 @@
   (with-slots (count) l
     (incf count)))
 
-;;;
-;;;    Make copy of current node. Surgically update current node to
-;;;    become "previous" node in place.
-;;;    
-(defgeneric splice-before (node obj)
-  (:documentation "Splice OBJ into chain of nodes before NODE."))
-(defmethod splice-before ((node cons) obj)
-  (let ((copy (cons (first node) (rest node))))
-    (setf (first node) obj
-          (rest node) copy)))
-
 (defmethod insert-after ((l singly-linked-list) node obj)
   (declare (ignore l))
   (splice-after node obj))
@@ -756,12 +764,6 @@
   (declare (ignore node obj))
   (with-slots (count) l
     (incf count)))
-
-(defgeneric splice-after (node obj)
-  (:documentation "Splice OBJ into chain of nodes after NODE."))
-(defmethod splice-after ((node cons) obj)
-  (let ((tail (cons obj (rest node))))
-    (setf (rest node) tail)))
 
 (defmethod delete ((l singly-linked-list) (i integer))
   (with-slots (store) l
@@ -828,17 +830,6 @@
 ;; 	     (setf store (rest store))))
 ;; 	  (t (excise-node doomed)))) )
   
-(defgeneric excise-node (doomed)
-  (:documentation "Surgically remove the doomed node from the list."))
-(defmethod excise-node ((doomed cons))
-  (let ((content (first doomed))
-        (saved (rest doomed)))
-    (prog1 content
-      (cond ((null saved) ; Can't delete last node
-             (error "Target node must have non-nil next node"))
-            (t (setf (first doomed) (first saved)
-                     (rest doomed) (rest saved)))) )))
-
 ;;;    DELETE-CHILD cannot delete 1st node in list!
 ;;;    - Route around child.
 ;;;    - PARENT cannot itself be last elt.
@@ -849,15 +840,6 @@
   (declare (ignore parent))
   (with-slots (count) l
     (decf count)))
-
-(defgeneric excise-child (parent)
-  (:documentation "Surgically remove the child of the given node from the list."))
-(defmethod excise-child ((parent cons))
-  (let ((child (rest parent)))
-    (if (null child)
-        (error "Parent must have child node")
-        (prog1 (first child)
-          (setf (rest parent) (rest child)))) ))
 
 (defmethod nth ((l singly-linked-list) (i integer))
   (with-slots (store) l
@@ -1118,6 +1100,52 @@
    (content :accessor content :initarg :content :initform nil)
    (next :accessor next :initarg :next :initform nil :type (or null dcons))))
 
+(defmethod print-object ((dcons dcons) stream)
+  (print-unreadable-object (dcons stream)
+    (print-previous stream dcons)
+    (format stream "~A" (content dcons))
+    (print-next stream dcons)))
+
+(defun print-previous (stream dcons)
+  (cond ((null (previous dcons)) (format stream "∅ ← "))
+        ((eq dcons (previous dcons)) (format stream "↻ "))
+        (t (format stream "~A ← " (content (previous dcons)))) ))
+
+(defun print-next (stream dcons)
+  (cond ((null (next dcons)) (format stream " → ∅"))
+        ((eq dcons (next dcons)) (format stream " ↺"))
+        (t (format stream " → ~A" (content (next dcons)))) ))
+
+;;;
+;;;    Toyed with calling this function DCONS. Not quite analogous with CONS...
+;;;    It doesn't create a DCONS object but instead modifies the two passed in.
+;;;    
+(defun dlink (previous next)
+  (setf (next previous) next
+        (previous next) previous))
+
+(defmethod splice-before ((node dcons) obj)
+  (let ((new-dcons (make-instance 'dcons :content obj)))
+    (dlink (previous node) new-dcons)
+    (dlink new-dcons node)))
+  
+(defmethod splice-after ((node dcons) obj)
+  (let ((new-dcons (make-instance 'dcons :content obj)))
+    (dlink new-dcons (next node)) ; Do this in the right order!!
+    (dlink node new-dcons)))
+
+(defmethod excise-node ((doomed dcons))
+  (cond ((eq doomed (next doomed)) (error "Cannot delete sole node."))
+        (t (prog1 (content doomed)
+             (dlink (previous doomed) (next doomed)))) ))
+
+(defmethod excise-child ((parent dcons))
+  (let ((child (next parent)))
+    (if (eq parent child)
+        (error "Parent must have child node")
+        (prog1 (content child)
+          (dlink parent (next child)))) ))
+
 ;;;
 ;;;    Alternative DCONS representation
 ;;;    
@@ -1147,30 +1175,6 @@
 ;; (defmethod (setf next) (obj (dcons dcons))
 ;;   (with-slots (node) dcons
 ;;     (setf (rest (rest node)) obj)))
-
-(defmethod print-object ((dcons dcons) stream)
-  (print-unreadable-object (dcons stream)
-    (print-previous stream dcons)
-    (format stream "~A" (content dcons))
-    (print-next stream dcons)))
-
-(defun print-previous (stream dcons)
-  (cond ((null (previous dcons)) (format stream "∅ ← "))
-        ((eq dcons (previous dcons)) (format stream "↻ "))
-        (t (format stream "~A ← " (content (previous dcons)))) ))
-
-(defun print-next (stream dcons)
-  (cond ((null (next dcons)) (format stream " → ∅"))
-        ((eq dcons (next dcons)) (format stream " ↺"))
-        (t (format stream " → ~A" (content (next dcons)))) ))
-
-;;;
-;;;    Toyed with calling this function DCONS. Not quite analogous with CONS...
-;;;    It doesn't create a DCONS object but instead modifies the two passed in.
-;;;    
-(defun dlink (previous next)
-  (setf (next previous) next
-        (previous next) previous))
 
 ;;;
 ;;;    Fully encapsulated state. Only accessible by closures.
@@ -1907,11 +1911,8 @@
 ;;;    Furthermore, we don't know the index of the NODE. If DCURSOR's index is before NODE, then it
 ;;;    need not be adjusted. If equal or after, it must be incremented. But we can't tell...
 ;;;    
-(defmethod splice-before ((node dcons) obj)
-  (let ((new-dcons (make-instance 'dcons :content obj)))
-    (dlink (previous node) new-dcons)
-    (dlink new-dcons node)))
-  
+
+
 (defmethod insert-after ((l doubly-linked-list) node obj)
   (declare (ignore l))
   (splice-after node obj))
@@ -1920,11 +1921,6 @@
   (with-slots (count cursor) l
     (incf count)
     (reset cursor))) ; Same issue as above with INSERT-BEFORE!!!
-
-(defmethod splice-after ((node dcons) obj)
-  (let ((new-dcons (make-instance 'dcons :content obj)))
-    (dlink new-dcons (next node)) ; Do this in the right order!!
-    (dlink node new-dcons)))
 
 ;;;
 ;;;    Confirm that DOOMED is actually a node in this list!
@@ -1951,11 +1947,6 @@
                (when (eq doomed store) ; First elt otherwise
                  (setf store (next doomed)))) ))))
 
-(defmethod excise-node ((doomed dcons))
-  (cond ((eq doomed (next doomed)) (error "Cannot delete sole node."))
-        (t (prog1 (content doomed)
-             (dlink (previous doomed) (next doomed)))) ))
-
 ;;;
 ;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST.
 ;;;    
@@ -1970,13 +1961,6 @@
   (with-slots (count cursor) l
     (decf count)
     (reset cursor))) ; NTH-DCONS moves cursor in most cases?
-
-(defmethod excise-child ((parent dcons))
-  (let ((child (next parent)))
-    (if (eq parent child)
-        (error "Parent must have child node")
-        (prog1 (content child)
-          (dlink parent (next child)))) ))
 
 (defmethod index ((l doubly-linked-list) obj &key (test #'eql))
   (with-slots (store count) l
