@@ -453,7 +453,7 @@
   (with-slots (store) l
     (setf (fill-pointer store) 0)))
 
-(defun make-random-access-cursor (l)
+(defun make-random-access-list-cursor (l)
   (let ((index 0))
     (make-instance 'cursor
                    :done #'(lambda ()
@@ -466,7 +466,7 @@
   (with-slots (modification-count) l
     (make-instance 'mutable-collection-iterator
                    :modification-count #'(lambda () modification-count)
-                   :cursor (make-random-access-cursor l))))
+                   :cursor (make-random-access-list-cursor l))))
 
 (defmethod list-iterator ((l array-list) &optional (start 0))
   (make-instance 'random-access-list-list-iterator
@@ -574,7 +574,7 @@
   (with-slots (modification-count) l
     (make-instance 'mutable-collection-iterator
                    :modification-count #'(lambda () modification-count)
-                   :cursor (make-random-access-cursor l))))
+                   :cursor (make-random-access-list-cursor l))))
 
 (defmethod list-iterator ((l array-list-x) &optional (start 0))
   (make-instance 'random-access-list-list-iterator
@@ -2000,7 +2000,7 @@
   (with-slots (modification-count) l
     (make-instance 'mutable-collection-iterator
                    :modification-count #'(lambda () modification-count)
-                   :cursor (make-random-access-cursor l))))
+                   :cursor (make-random-access-list-cursor l))))
 
 (defmethod list-iterator ((l hash-table-list) &optional (start 0))
   (make-instance 'random-access-list-list-iterator
@@ -2140,7 +2140,7 @@
   (with-slots (modification-count) l
     (make-instance 'mutable-collection-iterator
                    :modification-count #'(lambda () modification-count)
-                   :cursor (make-random-access-cursor l))))
+                   :cursor (make-random-access-list-cursor l))))
 
 (defmethod list-iterator ((l hash-table-list-x) &optional (start 0))
   (make-instance 'random-access-list-list-iterator
@@ -2269,7 +2269,7 @@
   (with-slots (modification-count) l
     (make-instance 'mutable-collection-iterator
                    :modification-count #'(lambda () modification-count)
-                   :cursor (make-random-access-cursor l))))
+                   :cursor (make-random-access-list-cursor l))))
 
 (defmethod list-iterator ((l hash-table-list-z) &optional (start 0))
   (make-instance 'random-access-list-list-iterator
