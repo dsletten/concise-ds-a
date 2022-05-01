@@ -94,14 +94,14 @@
 
 (deftest test-singly-linked-list-x-iterator ()
   (check
-   (let ((sll (make-instance 'singly-linked-list-x)))
-     (fill sll 1000)
-     (test-iterator sll))
+   (let ((sllx (make-instance 'singly-linked-list-x)))
+     (fill sllx 1000)
+     (test-iterator sllx))
    (test-empty-iterator #'(lambda () (make-instance 'singly-linked-list-x)))
-   (let ((sll (make-instance 'singly-linked-list-x))
+   (let ((sllx (make-instance 'singly-linked-list-x))
          (contents (make-random-contents)))
-     (apply #'add sll contents)
-     (test-iterator-contents sll contents))))
+     (apply #'add sllx contents)
+     (test-iterator-contents sllx contents))))
 
 (deftest test-doubly-linked-list-iterator ()
   (check
@@ -125,6 +125,28 @@
      (apply #'add htl contents)
      (test-iterator-contents htl contents))))
 
+(deftest test-hash-table-list-x-iterator ()
+  (check
+   (let ((htlx (make-instance 'hash-table-list-x)))
+     (fill htlx 1000)
+     (test-iterator htlx))
+   (test-empty-iterator #'(lambda () (make-instance 'hash-table-list-x)))
+   (let ((htlx (make-instance 'hash-table-list-x))
+         (contents (make-random-contents)))
+     (apply #'add htlx contents)
+     (test-iterator-contents htlx contents))))
+
+(deftest test-hash-table-list-z-iterator ()
+  (check
+   (let ((htlz (make-instance 'hash-table-list-z)))
+     (fill htlz 1000)
+     (test-iterator htlz))
+   (test-empty-iterator #'(lambda () (make-instance 'hash-table-list-z)))
+   (let ((htlz (make-instance 'hash-table-list-z))
+         (contents (make-random-contents)))
+     (apply #'add htlz contents)
+     (test-iterator-contents htlz contents))))
+
 (deftest test-iterator-all ()
   (check
    (test-array-list-iterator)
@@ -132,4 +154,6 @@
    (test-singly-linked-list-iterator)
    (test-singly-linked-list-x-iterator)
    (test-doubly-linked-list-iterator)
-   (test-hash-table-list-iterator)))
+   (test-hash-table-list-iterator)
+   (test-hash-table-list-x-iterator)
+   (test-hash-table-list-z-iterator)))
