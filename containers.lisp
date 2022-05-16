@@ -168,6 +168,9 @@
                do (setf (gethash name ,interface) fn))
          (make-instance 'remote-control :interface ,interface)))) )
 
+;;;
+;;;    CURSOR
+;;;
 (defclass cursor ()
   ((done :initarg :done :documentation "A function that determines whether traversal is complete.")
    (current :initarg :current :documentation "A function that yields the current element of the collection.")
