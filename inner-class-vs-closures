@@ -1,0 +1,87 @@
+  Closures vs. methods
+  - A method on an object is visible to any other object (moderated by access modifiers--private,
+    protected, public--in some langs). A closure passed from one object to another
+    is entirely private. For example, a DOUBLY-LINKED-LIST could expose a HEAD-NODE method. Instead
+    it passes a closure to its associated DCURSOR. This gives read-only access to the DCURSOR only.
+  - A closure can be a side door to provide controlled access from one object to another. The
+    front door API is available to everyone but requires a reference to an object. That reference
+    also opens up the back door via SLOT-VALUE. But a closure limits access.
+  - No inheritanct w/ closures. Is this the same general issue between functions vs. generic functions?
+  - Inheritance flow is inverted?
+    Previously, subclass implemented specific iterator behavior. Now superclass holds generic behavior
+    that is customized based on slots that it holds.
+    Example: ITERATOR < MUTABLE-COLLECTION-ITERATOR < RANDOM-ACCESS-LIST-ITERATOR
+    CURRENT method
+         MUT :AROUND -> I :AROUND -> RAND primary
+
+    Now
+         MUT :AROUND -> I :AROUND -> DONE slot (closure)
+    
+
+- Closures must be slots on an object rather than generic functions. Obviously they
+  carry different state for each object they are associated with. E.g., a CURSOR must have
+  an ADVANCE slot for the particular collection it is connected to.
+- Furthermore, any state on which the CURSOR relies must be captured via closures. CURSORs
+  can't randomly have different slots for different types of collections--unlike Java anonymous
+  classes:
+  new Cursor<E>() {   <-- Cursor interface. No explicit state.
+            private Dcursor dcursor = setupCursor();  <-- But this instance of Cursor has these fields
+            private boolean sealedForYourProtection = true; <--|
+
+            @Override
+            public boolean isDone() {
+                return isEmpty() || (!sealedForYourProtection && dcursor.atStart());
+            }
+
+            @Override
+            public E current() {
+                return dcursor.node.getContent();
+            }
+
+            @Override
+            public void advance() {
+                if (!isDone()) {
+                    dcursor.advance();
+                    sealedForYourProtection = false;
+                }
+            }
+        }
+
+(defun make-doubly-linked-list-cursor (dcursor) <-- Closure captures environment: One parameter +
+  (let ((sealed-for-your-protection t))             one local variable.
+    (make-instance 'cursor
+                   :done #'(lambda ()
+                             (or (not (initializedp dcursor))
+                                 (and (not sealed-for-your-protection) (at-start-p dcursor))))
+                   :current #'(lambda ()
+                                (with-slots (node) dcursor
+                                  (content node)))
+                   :advance #'(lambda ()
+                                (advance dcursor)
+                                (setf sealed-for-your-protection nil)))) )
+
+In use by Iterator:
+    public final boolean isDone() {
+        return checkDone();
+    }
+
+    protected boolean checkDone() {
+        return cursor.isDone();  <-- Delegate to Cursor method
+    }
+
+MutableCollectionIterator:
+    @Override
+    public boolean checkDone() {
+        checkComodification();
+
+        return super.checkDone();
+    }
+
+
+(defmethod done ((i iterator))
+  (with-slots (cursor) i
+    (with-slots (done) cursor
+      (funcall done))))      <-- Invoke slot of cursor
+(defmethod done :around ((i mutable-collection-iterator))
+  (check-co-modification i)
+  (call-next-method))

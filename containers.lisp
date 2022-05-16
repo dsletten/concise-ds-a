@@ -142,6 +142,41 @@
     (incf modification-count)))
 
 ;;;
+;;;    REMOTE-CONTROL
+;;;    
+(defclass remote-control ()
+  ((interface :initarg :interface)))
+
+;; (defgeneric press (remote-control button &rest args)
+;;   (:documentation "Press a button on the remote control."))
+;; (defmethod press ((rc remote-control) button &rest args)
+;;   (with-slots (interface) rc
+;;     (apply (gethash button interface) args)))
+
+(defmacro press (rc button &rest args)
+  (let ((interface (gensym)))
+    `(with-slots ((,interface interface)) ,rc
+       (funcall (gethash ',button ,interface) ,@args))))
+
+(defmacro with-remote (slots obj fns)
+  (let ((interface (gensym))
+        (functions (gensym)))
+    `(with-slots ,slots ,obj
+       (let ((,interface (make-hash-table))
+             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
+         (loop for (name fn) on ,functions
+               do (setf (gethash name ,interface) fn))
+         (make-instance 'remote-control :interface ,interface)))) )
+
+;;;
+;;;    CURSOR
+;;;
+(defclass cursor ()
+  ((done :initarg :done :documentation "A function that determines whether traversal is complete.")
+   (current :initarg :current :documentation "A function that yields the current element of the collection.")
+   (advance :initarg :advance :documentation "A function that moves to the next element if any.")))
+
+;;;
 ;;;    ITERATOR
 ;;;
 ;;;    Design conflict
@@ -158,17 +193,18 @@
 ;;;    - Binary tree: push parent
 ;;;    - Arbitrary tree: push parent + remaining children
 ;;;    
+;;;    This is a klunky early version of REMOTE-CONTROL??
+;;;    
 (defclass iterator ()
-  ((done :initarg :done :documentation "A function that determines whether traversal is complete.")
-   (current :initarg :current :documentation "A function that yields the current element of the collection.")
-   (advance :initarg :advance :documentation "A function that moves to the next element if any."))
+  ((cursor :initarg :cursor))
   (:documentation "External iterator for a collection."))
 
 (defgeneric done (iterator)
   (:documentation "Is the traversal completed?"))
 (defmethod done ((i iterator))
-  (with-slots (done) i
-    (funcall done)))
+  (with-slots (cursor) i
+    (with-slots (done) cursor
+      (funcall done))))
 
 ;;; FIRST, REWIND???
 (defgeneric current (iterator)
@@ -178,16 +214,18 @@
       (error "Iteration already finished")
       (call-next-method)))
 (defmethod current ((i iterator))
-  (with-slots (current) i
-    (funcall current)))
+  (with-slots (cursor) i
+    (with-slots (current) cursor
+      (funcall current))))
 
 ;;; Empty???
 (defgeneric next (iterator)
   (:documentation "Advances iterator to the next element of the traversal. Returns that element or NIL if at end."))
 (defmethod next ((i iterator))
-  (with-slots (advance) i
+  (with-slots (cursor) i
     (cond ((done i) nil)
-          (t (funcall advance)
+          (t (with-slots (advance) cursor
+               (funcall advance))
              (if (done i)
                  nil
                  (current i)))) ))
@@ -235,12 +273,10 @@
 (defclass persistent-collection-iterator (iterator) ())
 
 (defmethod next ((i persistent-collection-iterator))
-  (with-slots (advance) i
+  (with-slots (cursor) i
     (cond ((done i) i)
-          (t (let ((new-iterator (funcall advance)))
-               (if (done new-iterator)
-                   (values new-iterator nil)
-                   (values new-iterator (current new-iterator)))) ))))
-
-
-
+          (t (with-slots (advance) cursor
+               (let ((new-iterator (funcall advance)))
+                 (if (done new-iterator)
+                     (values new-iterator nil)
+                     (values new-iterator (current new-iterator)))) )))) )
