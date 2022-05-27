@@ -1,0 +1,54 @@
+I came up with an idea to model an arbitrary "remote control" which an object yields to another
+that provides some sort of controlled privileged access. For example, a list could provide its iterator
+with a function to access its MODIFICATION-COUNT rather than defining a reader, which allows any object
+to access it.
+
+Furthermore, the remote control was intended to be as loosely defined as JavaScript objects. In other words,
+arbitrary commands could be mapped to the corresponding functions to execute them. The functions would be
+closures that captured the privileged state. The remote control would really be little more than a hash table, and a couple of macros would make everything more convenient.
+
+This may still be worth playing around, but it turns out to be problematic in Java due to all of the static
+type issues:
+- What types do the commands return? Casts everywhere...
+- Is every command just a Supplier? No Consumers? Multiple arities?
+- What if an expected command is missing from the map?
+
+Example: (See list-iterator-remote-control branch)
+;;;
+;;;    REMOTE-CONTROL
+;;;    
+(defclass remote-control ()
+  ((interface :initarg :interface)))
+
+;; (defgeneric press (remote-control button &rest args)
+;;   (:documentation "Press a button on the remote control."))
+;; (defmethod press ((rc remote-control) button &rest args)
+;;   (with-slots (interface) rc
+;;     (apply (gethash button interface) args)))
+
+(defmacro press (rc button &rest args)
+  (let ((interface (gensym)))
+    `(with-slots ((,interface interface)) ,rc
+       (funcall (gethash ',button ,interface) ,@args))))
+
+(defmacro with-remote (slots obj fns)
+  (let ((interface (gensym))
+        (functions (gensym)))
+    `(with-slots ,slots ,obj
+       (let ((,interface (make-hash-table))
+             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
+         (loop for (name fn) on ,functions
+               do (setf (gethash name ,interface) fn))
+         (make-instance 'remote-control :interface ,interface)))) )
+
+
+
+(defmethod list-iterator ((l array-list) &optional (start 0))
+  (make-instance 'random-access-list-list-iterator
+                 :list l
+                 :start start
+                 :remote-control (with-remote (modification-count) l
+                                   ((modification-count #'(lambda () modification-count)))) ))
+
+
+(另见 old DCURSOR)
