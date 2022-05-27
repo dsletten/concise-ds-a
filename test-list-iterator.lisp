@@ -224,6 +224,19 @@
 
 ))
 
+(deftest test-doubly-linked-list-ratchet-list-iterator ()
+  (check
+   (test-list-iterator-vs-iterator #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-forward-traversal #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-backward-traversal #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-remove-forward #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-remove-backward #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-remove-inside-out #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-add-before-empty #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+   (test-add-after-empty #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
+
+))
+
 (deftest test-hash-table-list-list-iterator ()
   (check
    (test-list-iterator-vs-iterator #'(lambda () (make-instance 'hash-table-list)))
@@ -270,6 +283,7 @@
    (test-singly-linked-list-list-iterator)
    (test-singly-linked-list-x-list-iterator)
    (test-doubly-linked-list-list-iterator)
+   (test-doubly-linked-list-ratchet-list-iterator)
    (test-hash-table-list-list-iterator)
    (test-hash-table-list-x-list-iterator)
    (test-hash-table-list-z-list-iterator)))

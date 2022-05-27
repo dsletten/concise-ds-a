@@ -470,7 +470,7 @@
   (defmethod dequeue ((q persistent-queue))
     (with-slots (type front rear count) q
       (if (null (rest front))
-          (values (initialize-queue type (reverse rear) '() (1- count)) (front q))
+          (values (initialize-queue type (cl:reverse rear) '() (1- count)) (front q))
           (values (initialize-queue type (rest front) rear (1- count)) (front q)))) ))
 
 (defmethod front ((q persistent-queue))
@@ -770,7 +770,7 @@
       (let ((new-deque (if (null (rest front))
                            (if (null (rest rear))
                                (clear dq)
-                               (initialize-deque type (rest (reverse rear)) (cl:list (rear dq)) (1- count)))
+                               (initialize-deque type (rest (cl:reverse rear)) (cl:list (rear dq)) (1- count)))
                            (initialize-deque type (rest front) rear (1- count)))) )
         (values new-deque (front dq)))) )
   (defmethod dequeue* ((dq persistent-deque))
@@ -778,7 +778,7 @@
       (let ((new-deque (if (null (rest rear))
                            (if (null (rest front))
                                (clear dq)
-                               (initialize-deque type (cl:list (front dq)) (rest (reverse front)) (1- count)))
+                               (initialize-deque type (cl:list (front dq)) (rest (cl:reverse front)) (1- count)))
                            (initialize-deque type front (rest rear) (1- count)))) )
         (values new-deque (rear dq)))) ))
 

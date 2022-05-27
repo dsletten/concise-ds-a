@@ -46,11 +46,11 @@
            :array-queue :linked-queue :recycling-queue :ring-buffer :hash-table-queue :persistent-queue
            :collection :contains :equals :each
            :iterator :current :next :done
-           :list :fill-elt :add :insert :delete :nth :index :slice
+           :list :fill-elt :add :insert :delete :nth :index :reverse :slice
            :array-list :singly-linked-list :doubly-linked-list :hash-table-list :persistent-list
            :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear
            :list-iterator :remove :current-index :has-next :has-previous)
-  (:shadow :type :push :pop :list :nth :delete :remove :fill))
+  (:shadow :type :push :pop :list :nth :delete :remove :fill :reverse))
 
 (in-package :containers)
 
@@ -106,9 +106,16 @@
   (if (typep obj (type c))
       (call-next-method)
       (error "~A is not of type ~A" obj (type c))))
-(defmethod contains ((c collection) obj &key test)
-  (declare (ignore c obj test))
-  (error "COLLECTION does not implement CONTAINS"))
+(defmethod contains ((c collection) obj &key (test #'eql)) ; Check time efficiency
+  (do ((iterator (iterator c)))
+      ((done iterator) nil)
+    (let ((elt (current iterator)))
+      (if (funcall test obj elt)
+          (return elt)
+          (next iterator)))) )
+;; (defmethod contains ((c collection) obj &key test)
+;;   (declare (ignore c obj test))
+;;   (error "COLLECTION does not implement CONTAINS"))
 
 (defgeneric equals (collection1 collection2 &key test)
   (:documentation "Are the two collections equal?"))
@@ -142,33 +149,6 @@
     (incf modification-count)))
 
 ;;;
-;;;    REMOTE-CONTROL
-;;;    
-(defclass remote-control ()
-  ((interface :initarg :interface)))
-
-;; (defgeneric press (remote-control button &rest args)
-;;   (:documentation "Press a button on the remote control."))
-;; (defmethod press ((rc remote-control) button &rest args)
-;;   (with-slots (interface) rc
-;;     (apply (gethash button interface) args)))
-
-(defmacro press (rc button &rest args)
-  (let ((interface (gensym)))
-    `(with-slots ((,interface interface)) ,rc
-       (funcall (gethash ',button ,interface) ,@args))))
-
-(defmacro with-remote (slots obj fns)
-  (let ((interface (gensym))
-        (functions (gensym)))
-    `(with-slots ,slots ,obj
-       (let ((,interface (make-hash-table))
-             (,functions (cl:list ,@(loop for (name fn) in fns collect `',name collect fn))))
-         (loop for (name fn) on ,functions
-               do (setf (gethash name ,interface) fn))
-         (make-instance 'remote-control :interface ,interface)))) )
-
-;;;
 ;;;    CURSOR
 ;;;
 (defclass cursor ()
@@ -192,8 +172,6 @@
 ;;;    Use PARENTS stack for tree iterator (like HISTORY for SINGLY-LINKED-LIST LIST-ITERATOR)
 ;;;    - Binary tree: push parent
 ;;;    - Arbitrary tree: push parent + remaining children
-;;;    
-;;;    This is a klunky early version of REMOTE-CONTROL??
 ;;;    
 (defclass iterator ()
   ((cursor :initarg :cursor))
