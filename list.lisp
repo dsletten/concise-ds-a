@@ -1300,17 +1300,14 @@
 ;;;
 ;;;    DCURSORB - Moves in opposite direction
 ;;;    
-(defclass dcursorb ()
-  ((node :type (or null dcons))
-   (index :initform 0)
-   (head :initarg :head)
-   (size :initarg :size))
+(defclass dcursorb (dcursor)
+  ()
   (:documentation "Cursor for circular doubly-linked list. Travels backwards."))
 
-(defmethod initialize-instance :after ((c dcursorb) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (node head) c
-    (setf node (funcall head)))) ; Empty LIST => (null node)
+;; (defmethod initialize-instance :after ((c dcursorb) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (node head) c
+;;     (setf node (funcall head)))) ; Empty LIST => (null node)
 
 ;; (defun initializedp (cursor)
 ;;   (not (null (slot-value cursor 'node))))
@@ -1329,11 +1326,11 @@
 ;;     (or (not (initializedp cursor))
 ;;         (= index (1- (funcall size)))) ))
 
-(defmethod advance :around ((c dcursorb) &optional step)
-  (declare (ignore step))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
+;; (defmethod advance :around ((c dcursorb) &optional step)
+;;   (declare (ignore step))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
 (defmethod advance ((c dcursorb) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
   (with-slots (node index size) c
@@ -1342,11 +1339,11 @@
              (setf node (previous node)))
     (setf index (mod index (funcall size)))) )
 
-(defmethod rewind :around ((c dcursorb) &optional step)
-  (declare (ignore step))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
+;; (defmethod rewind :around ((c dcursorb) &optional step)
+;;   (declare (ignore step))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
 (defmethod rewind ((c dcursorb) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
   (with-slots (node index size) c
@@ -1355,21 +1352,21 @@
              (setf node (next node)))
     (setf index (mod index (funcall size)))) )
 
-(defmethod bump :around ((c dcursorb))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
+;; (defmethod bump :around ((c dcursorb))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
 (defmethod bump ((c dcursorb))
   (with-slots (node) c
     (setf node (previous node))))
 
-(defmethod nudge :around ((c dcursorb))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
-(defmethod nudge ((c dcursorb))
-  (with-slots (index) c
-    (incf index)))
+;; (defmethod nudge :around ((c dcursorb))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
+;; (defmethod nudge ((c dcursorb))
+;;   (with-slots (index) c
+;;     (incf index)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -2550,7 +2547,7 @@
 
 (defclass doubly-linked-list-ratchet (doubly-linked-list)
   ((direction :initform :forward :initarg :direction))
-  (:documentation "Circular doubly-linked list."))
+  (:documentation "Reversible circular doubly-linked list."))
 
 (defun ratchet-forward (list node)
   (with-slots (direction) list
@@ -2665,6 +2662,9 @@
       (:forward (splice-after node obj))
       (:backward (splice-before node obj)))) )
 
+;;;
+;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST-RATCHET.
+;;;    
 (defmethod delete-child ((l doubly-linked-list-ratchet) (parent dcons))
   ;; (flet ((excise-child-ratchet (parent)
   ;;          (let ((child (ratchet-forward l parent)))
@@ -3161,7 +3161,7 @@
     (make-instance 'persistent-list-list-iterator
                    :list l
                    :start start
-                   :head #'(lambda () store))))
+                   :head store)))
 
 (defmethod contains ((l persistent-list) obj &key (test #'eql))
   (with-slots (store) l
@@ -3847,8 +3847,8 @@
 ;    ((list :initarg :list :reader list) ; ????????????????? <-- This is #'list?!
 ;    ((list :initarg :list)
     ((index :type integer :initform 0)
-     (cursor :type cl:list)
-     (head :initarg :head)
+     (cursor :type cl:list :initarg :head)
+;     (head :initarg :head)
      (history :initform empty-history))))
 
 ;; (defmethod initialize-instance :after ((i persistent-list-list-iterator) &rest initargs &key (start 0))
@@ -3860,10 +3860,10 @@
     ;;   (initialize-persistent-cursor i))))
 ;    (loop repeat start do (next i)))) ; Build initial history
 
-(defmethod initialize-instance :after ((i persistent-list-list-iterator) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (cursor head) i
-    (setf cursor (funcall head))))
+;; (defmethod initialize-instance :after ((i persistent-list-list-iterator) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (cursor head) i
+;;     (setf cursor (funcall head))))
 
 ;;;
 ;;;    Refactor:
@@ -3917,13 +3917,12 @@
     (not (emptyp history))))
 
 (flet ((initialize-iterator (iterator index cursor history)
-         (with-slots (list head) iterator
+         (with-slots (list) iterator
            (let ((new-iterator (make-instance 'persistent-list-list-iterator
                                               :list list
-                                              :head head)))
-             (with-slots ((new-index index) (new-cursor cursor) (new-history history)) new-iterator
-               (setf new-cursor cursor
-                     new-index index
+                                              :head cursor)))
+             (with-slots ((new-index index) (new-history history)) new-iterator
+               (setf new-index index
                      new-history history))
              new-iterator))))
   (defmethod next ((i persistent-list-list-iterator))
