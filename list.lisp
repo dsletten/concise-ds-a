@@ -542,14 +542,6 @@
   (with-slots (store) l
     (position obj store :test test)))
 
-;; (defmethod slice ((l array-list) (i integer) (n integer))
-;;   (with-slots (store) l
-;;     (let ((al (make-array-list :type (type l) :fill-elt (fill-elt l)))
-;;           (count (size l)))
-;; ;      (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (aref store k)))
-;;       (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (nth l k)))
-;;       al)))
-
 (defmethod slice ((l array-list) (i integer) &optional n)
   (let ((al (make-array-list :type (type l) :fill-elt (fill-elt l)))
         (count (size l)))
@@ -657,14 +649,6 @@
       (if (null pos)
           pos
           (- pos offset)))) )
-
-;; (defmethod slice ((l array-list-x) (i integer) (n integer))
-;;   (with-slots (store offset) l
-;;     (let ((al (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
-;;           (count (size l)))
-;; ;      (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (aref store (+ k offset))))
-;;       (apply #'add al (loop for k from (min i count) below (min (+ i n) count) collect (nth l k)))
-;;       al)))
 
 (defmethod slice ((l array-list-x) (i integer) &optional n)
   (let ((al (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
@@ -858,12 +842,6 @@
   (with-slots (store) l
     (position obj store :test test)))
 
-;; (defmethod slice ((l singly-linked-list) (i integer) (n integer))
-;;   (with-slots (store count) l
-;;     (let ((sll (make-linked-list :type (type l) :fill-elt (fill-elt l))))
-;;       (apply #'add sll (subseq store (min i count) (min (+ i n) count)))
-;;       sll)))
-
 (defmethod slice ((l singly-linked-list) (i integer) &optional n)
   (with-slots (store count) l
     (let ((sll (make-linked-list :type (type l) :fill-elt (fill-elt l))))
@@ -1040,12 +1018,6 @@
 (defmethod index ((l singly-linked-list-x) obj &key (test #'eql))
   (with-slots (front) l
     (position obj front :test test)))
-
-;; (defmethod slice ((l singly-linked-list-x) (i integer) (n integer))
-;;   (with-slots (front count) l
-;;     (let ((sllx (make-linked-list-x :type (type l) :fill-elt (fill-elt l))))
-;;       (apply #'add sllx (subseq front (min i count) (min (+ i n) count)))
-;;       sllx)))
 
 (defmethod slice ((l singly-linked-list-x) (i integer) &optional n)
   (with-slots (front count) l
@@ -2012,6 +1984,10 @@
             (reposition-cursor cursor i count)
             node)))) )
 
+;;;
+;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
+;;;    superclass :AFTER methods from incrementing MODIFICATION-COUNT twice! 见 SINGLY-LINKED-LIST
+;;;    
 (defmethod insert ((l doubly-linked-list) (i integer) obj)
   (with-slots (store) l
     (splice-before (nth-dcons l i) obj)
@@ -2026,6 +2002,7 @@
                 (<= 0 i index)
                 (and (minusp i) (<= 0 (+ i count) index)))
         (reset cursor)))) )
+
 (defmethod delete ((l doubly-linked-list) (i integer))
   (delete-dcons l (nth-dcons l i)))
 (defmethod delete :after ((l doubly-linked-list) (i integer))
@@ -2033,29 +2010,31 @@
   (with-slots (count cursor) l
     (decf count)
     (reset cursor)))
+
 (defmethod nth ((l doubly-linked-list) (i integer))
   (with-slots (store count) l
     (content (nth-dcons l i))))
+
 (defmethod (setf nth) (obj (l doubly-linked-list) (i integer))
   (with-slots (store) l
     (setf (content (nth-dcons l i)) obj)))
-;; (defmethod slice ((l doubly-linked-list) (i integer) (n integer))
-;;   (labels ((dsubseq (start end)
-;;              (loop for i from start below end
-;;                    for dcons = (nth-dcons l start) then (next dcons)
-;;                    collect (content dcons))))
-;;     (with-slots (count) l
-;;       (let ((dll (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l))))
-;;         (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))
-;;         dll)))) )
+
 (defmethod slice ((l doubly-linked-list) (i integer) &optional n)
-  (labels ((dsubseq (start end)
-             (loop for i from start below end
-                   for dcons = (nth-dcons l start) then (next dcons)
-                   collect (content dcons))))
-    (with-slots (count) l
-      (let ((dll (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l))))
-        (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))) )))
+  (with-slots (count) l
+    (let ((dll (make-empty-list l)))
+      (apply #'add dll (dsubseq l (min i count) (min (+ i n) count)))) ))
+
+(defgeneric make-empty-list (l)
+  (:documentation "Return an empty list similar to L."))
+(defmethod make-empty-list ((l doubly-linked-list))
+  (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l)))
+
+(defgeneric dsubseq (l start end)
+  (:documentation "Return a subsequence of list L determined by bounding indices START and END."))
+(defmethod dsubseq ((l doubly-linked-list) (start integer) (end integer))
+  (loop for i from start below end
+        for dcons = (nth-dcons l start) then (next dcons)
+        collect (content dcons)))
 
 ;;;
 ;;;    Is NODE actually part of the structure of L???
@@ -2596,8 +2575,8 @@
       (setf store (ratchet-forward l store)))
     (setf cursor (setup-cursor l))))
 
-(defun make-doubly-linked-list-ratchet (&key (type t) (fill-elt nil))
-  (make-instance 'doubly-linked-list-ratchet :type type :fill-elt fill-elt))
+(defun make-doubly-linked-list-ratchet (&key (type t) (fill-elt nil) (direction :forward))
+  (make-instance 'doubly-linked-list-ratchet :type type :fill-elt fill-elt :direction direction))
 
 (defmethod clear ((l doubly-linked-list-ratchet))
   (unless (emptyp l)
@@ -2636,17 +2615,14 @@
       (when (zerop i)
         (setf store (ratchet-backward l store)))) )
 
-(defmethod slice ((l doubly-linked-list-ratchet) (i integer) &optional n)
-  (labels ((dsubseq (start end)
-             (loop for i from start below end
-                   for dcons = (nth-dcons l start) then (ratchet-forward l dcons)
-                   collect (content dcons))))
-    (with-slots (count direction) l
-      (let ((dllr (make-instance 'doubly-linked-list-ratchet
-                                 :type (type l)
-                                 :fill-elt (fill-elt l)
-                                 :direction direction)))
-        (apply #'add dllr (dsubseq (min i count) (min (+ i n) count)))) )))
+(defmethod make-empty-list ((l doubly-linked-list-ratchet))
+  (with-slots (direction) l
+    (make-doubly-linked-list-ratchet :type (type l) :fill-elt (fill-elt l) :direction direction)))
+
+(defmethod dsubseq ((l doubly-linked-list-ratchet) (start integer) (end integer))
+  (loop for i from start below end
+        for dcons = (nth-dcons l start) then (ratchet-forward l dcons)
+        collect (content dcons)))
 
 (defmethod insert-before ((l doubly-linked-list-ratchet) node obj)
   (with-slots (store direction) l
