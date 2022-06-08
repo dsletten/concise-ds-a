@@ -1189,10 +1189,12 @@
 ;;;    - Index is potentially invalid anyway <- Any time NTH-DCONS modifies CURSOR!
 ;;;
 (defclass dcursor ()
-  ((node :type (or null dcons))
+  ((node :type (or null dcons dnode))
    (index :initform 0) ; Reader INDEX conflicts with list INDEX method!
    (head :initarg :head)
-   (size :initarg :size))
+   (size :initarg :size)
+   (next :initarg :next)
+   (previous :initarg :previous))
   (:documentation "Cursor for circular doubly-linked list."))
 
 (defmethod initialize-instance :after ((c dcursor) &rest initargs)
@@ -1226,10 +1228,10 @@
       (error "Cursor has not been initialized")))
 (defmethod advance ((c dcursor) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size) c
+  (with-slots (node index size next) c
     (loop repeat step
           do (incf index)
-             (setf node (next node)))
+             (setf node (funcall next node)))
     (setf index (mod index (funcall size)))) )
 
 (defgeneric rewind (cursor &optional step)
@@ -1241,10 +1243,10 @@
       (error "Cursor has not been initialized")))
 (defmethod rewind ((c dcursor) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size) c
+  (with-slots (node index size previous) c
     (loop repeat step
           do (decf index)
-             (setf node (previous node)))
+             (setf node (funcall previous node)))
     (setf index (mod index (funcall size)))) )
 
 ;;;
@@ -1257,8 +1259,8 @@
       (call-next-method)
       (error "Cursor has not been initialized")))
 (defmethod bump ((c dcursor))
-  (with-slots (node) c
-    (setf node (next node))))
+  (with-slots (node next) c
+    (setf node (funcall next node))))
 
 (defgeneric nudge (cursor)
   (:documentation "Nudge index ahead by one without adjusting node."))
@@ -1306,10 +1308,10 @@
 ;;       (error "Cursor has not been initialized")))
 (defmethod advance ((c dcursorb) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size) c
+  (with-slots (node index size previous) c
     (loop repeat step
           do (incf index)
-             (setf node (previous node)))
+             (setf node (funcall previous node)))
     (setf index (mod index (funcall size)))) )
 
 ;; (defmethod rewind :around ((c dcursorb) &optional step)
@@ -1319,10 +1321,10 @@
 ;;       (error "Cursor has not been initialized")))
 (defmethod rewind ((c dcursorb) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size) c
+  (with-slots (node index size next) c
     (loop repeat step
           do (decf index)
-             (setf node (next node)))
+             (setf node (funcall next node)))
     (setf index (mod index (funcall size)))) )
 
 ;; (defmethod bump :around ((c dcursorb))
@@ -1330,8 +1332,8 @@
 ;;       (call-next-method)
 ;;       (error "Cursor has not been initialized")))
 (defmethod bump ((c dcursorb))
-  (with-slots (node) c
-    (setf node (previous node))))
+  (with-slots (node previous) c
+    (setf node (funcall previous node))))
 
 ;; (defmethod nudge :around ((c dcursorb))
 ;;   (if (initializedp c)
@@ -1722,7 +1724,9 @@
   (with-slots (store count) dll
     (make-instance 'dcursor
                    :head #'(lambda () store)
-                   :size #'(lambda () count))))
+                   :size #'(lambda () count)
+                   :next #'next
+                   :previous #'previous)))
 
 (defmethod iterator ((l doubly-linked-list))
   (with-slots (modification-count) l
@@ -2571,7 +2575,9 @@
                      (:forward 'dcursor)
                      (:backward 'dcursorb))
                    :head #'(lambda () store)
-                   :size #'(lambda () count))))
+                   :size #'(lambda () count)
+                   :next #'next
+                   :previous #'previous)))
 
 (defmethod reverse ((l doubly-linked-list-ratchet))
   (with-slots (store cursor direction) l
@@ -2667,6 +2673,10 @@
 (defclass dnode ()
   ((content :accessor content :initarg :content)))
 
+(defmethod print-object ((dnode dnode) stream)
+  (print-unreadable-object (dnode stream)
+    (format stream "~S" (content dnode))))
+
 (defun make-node (obj)
   (make-instance 'dnode :content obj))
 
@@ -2674,61 +2684,61 @@
 ;;;    Reconcile with DCURSOR!
 ;;;    Too much duplication, partial reuse...
 ;;;    
-(defclass dnode-cursor ()
-  ((node :type (or null dnode))
-   (index :initform 0) ; Reader INDEX conflicts with list INDEX method!
-   (head :initarg :head)
-   (size :initarg :size)
-   (next :initarg :next)
-   (previous :initarg :previous))
-  (:documentation "Cursor for circular doubly-linked list."))
+;; (defclass dnode-cursor ()
+;;   ((node :type (or null dnode))
+;;    (index :initform 0) ; Reader INDEX conflicts with list INDEX method!
+;;    (head :initarg :head)
+;;    (size :initarg :size)
+;;    (next :initarg :next)
+;;    (previous :initarg :previous))
+;;   (:documentation "Cursor for circular doubly-linked list."))
 
-(defmethod initialize-instance :after ((c dnode-cursor) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (node head) c
-    (setf node (funcall head)))) ; Empty LIST => (null node)
+;; (defmethod initialize-instance :after ((c dnode-cursor) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (node head) c
+;;     (setf node (funcall head)))) ; Empty LIST => (null node)
 
-(defmethod advance :around ((c dnode-cursor) &optional step)
-  (declare (ignore step))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
-(defmethod advance ((c dnode-cursor) &optional (step 1))
-  (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size next) c
-    (loop repeat step
-          do (incf index)
-             (setf node (funcall next node)))
-    (setf index (mod index (funcall size)))) )
+;; (defmethod advance :around ((c dnode-cursor) &optional step)
+;;   (declare (ignore step))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
+;; (defmethod advance ((c dnode-cursor) &optional (step 1))
+;;   (assert (plusp step) () "STEP must be a positive value: ~A" step)
+;;   (with-slots (node index size next) c
+;;     (loop repeat step
+;;           do (incf index)
+;;              (setf node (funcall next node)))
+;;     (setf index (mod index (funcall size)))) )
 
-(defmethod rewind :around ((c dnode-cursor) &optional step)
-  (declare (ignore step))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
-(defmethod rewind ((c dnode-cursor) &optional (step 1))
-  (assert (plusp step) () "STEP must be a positive value: ~A" step)
-  (with-slots (node index size previous) c
-    (loop repeat step
-          do (decf index)
-             (setf node (funcall previous node)))
-    (setf index (mod index (funcall size)))) )
+;; (defmethod rewind :around ((c dnode-cursor) &optional step)
+;;   (declare (ignore step))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
+;; (defmethod rewind ((c dnode-cursor) &optional (step 1))
+;;   (assert (plusp step) () "STEP must be a positive value: ~A" step)
+;;   (with-slots (node index size previous) c
+;;     (loop repeat step
+;;           do (decf index)
+;;              (setf node (funcall previous node)))
+;;     (setf index (mod index (funcall size)))) )
 
-(defmethod bump :around ((c dnode-cursor))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
-(defmethod bump ((c dnode-cursor))
-  (with-slots (node next) c
-    (setf node (funcall next node))))
+;; (defmethod bump :around ((c dnode-cursor))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
+;; (defmethod bump ((c dnode-cursor))
+;;   (with-slots (node next) c
+;;     (setf node (funcall next node))))
 
-(defmethod nudge :around ((c dnode-cursor))
-  (if (initializedp c)
-      (call-next-method)
-      (error "Cursor has not been initialized")))
-(defmethod nudge ((c dnode-cursor))
-  (with-slots (index) c
-    (incf index)))
+;; (defmethod nudge :around ((c dnode-cursor))
+;;   (if (initializedp c)
+;;       (call-next-method)
+;;       (error "Cursor has not been initialized")))
+;; (defmethod nudge ((c dnode-cursor))
+;;   (with-slots (index) c
+;;     (incf index)))
 
 ;;;
 ;;;    In the DLLs above, the structure is in the nodes themselves. Here only the
@@ -2821,7 +2831,7 @@
 
 (defmethod setup-cursor ((dll doubly-linked-list-hash-table))
   (with-slots (head) dll
-    (make-instance 'dnode-cursor
+    (make-instance 'dcursor
                    :head #'(lambda () head)
                    :size #'(lambda () (size dll))
                    :next #'(lambda (node) (next-dnode dll node))
