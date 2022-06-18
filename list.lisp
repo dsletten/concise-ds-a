@@ -321,9 +321,18 @@
         ((< n 0) (error "Count N must be non-negative: ~D" n))
         (t (call-next-method))))
 ;(defmethod slice ((l list) (i integer) (n integer))
-(defmethod slice ((l list) (i integer) &optional n)
-  (declare (ignore l i n))
-  (error "LIST does not implement SLICE"))
+(defmethod slice ((l list) (i integer) &optional n) ; <-- Not really optional. :AROUND method always provides a value.
+  (let ((slice (make-empty-list l))
+        (count (size l)))
+    (apply #'add slice (sublist* l (min i count) (min (+ i n) count)))) )
+
+(defgeneric make-empty-list (l)
+  (:documentation "Return an empty list similar to L."))
+
+(defgeneric sublist* (l start end)
+  (:documentation "Return a subsequence of list L determined by bounding indices START and END."))
+(defmethod sublist* ((l list) (start integer) (end integer))
+  (loop for i from start below end collect (nth l i)))
 
 (defgeneric reverse (list)
   (:documentation "Reverse the list. In place???"))
@@ -464,6 +473,9 @@
 (defun make-array-list (&key (type t) (fill-elt nil))
  (make-instance 'array-list :type type :fill-elt fill-elt))
 
+(defmethod make-empty-list ((l array-list))
+  (make-array-list :type (type l) :fill-elt (fill-elt l)))
+
 (defmethod size ((l array-list))
   (with-slots (store) l
     (length store)))
@@ -542,11 +554,6 @@
   (with-slots (store) l
     (position obj store :test test)))
 
-(defmethod slice ((l array-list) (i integer) &optional n)
-  (let ((al (make-array-list :type (type l) :fill-elt (fill-elt l)))
-        (count (size l)))
-    (apply #'add al (loop for j from (min i count) below (min (+ i n) count) collect (nth l j)))) )
-
 ;;;
 ;;;    ARRAY-LIST-X
 ;;;    - Add OFFSET slot:
@@ -571,6 +578,9 @@
 
 (defun make-array-list-x (&key (type t) (fill-elt nil))
  (make-instance 'array-list-x :type type :fill-elt fill-elt))
+
+(defmethod make-empty-list ((l array-list-x))
+  (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod size ((l array-list-x))
   (with-slots (store offset) l
@@ -650,11 +660,6 @@
           pos
           (- pos offset)))) )
 
-(defmethod slice ((l array-list-x) (i integer) &optional n)
-  (let ((al (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
-        (count (size l)))
-    (apply #'add al (loop for j from (min i count) below (min (+ i n) count) collect (nth l j)))) )
-
 ;;;
 ;;;    SINGLY-LINKED-LIST
 ;;;    
@@ -664,6 +669,9 @@
 
 (defun make-linked-list (&key (type t) (fill-elt nil))
   (make-instance 'singly-linked-list :type type :fill-elt fill-elt))
+
+(defmethod make-empty-list ((l singly-linked-list))
+  (make-linked-list :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod size ((l singly-linked-list))
   (slot-value l 'count))
@@ -842,10 +850,9 @@
   (with-slots (store) l
     (position obj store :test test)))
 
-(defmethod slice ((l singly-linked-list) (i integer) &optional n)
-  (with-slots (store count) l
-    (let ((sll (make-linked-list :type (type l) :fill-elt (fill-elt l))))
-      (apply #'add sll (subseq store (min i count) (min (+ i n) count)))) ))
+(defmethod sublist* ((l singly-linked-list) (start integer) (end integer))
+  (with-slots (store) l
+    (subseq store start end)))
 
 ;;;
 ;;;    SINGLY-LINKED-LIST-X (TCONC)
@@ -872,6 +879,9 @@
 
 (defun make-linked-list-x (&key (type t) (fill-elt nil))
   (make-instance 'singly-linked-list-x :type type :fill-elt fill-elt))
+
+(defmethod make-empty-list ((l singly-linked-list-x))
+  (make-linked-list-x :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod size ((l singly-linked-list-x))
   (slot-value l 'count))
@@ -1019,10 +1029,9 @@
   (with-slots (front) l
     (position obj front :test test)))
 
-(defmethod slice ((l singly-linked-list-x) (i integer) &optional n)
-  (with-slots (front count) l
-    (let ((sllx (make-linked-list-x :type (type l) :fill-elt (fill-elt l))))
-      (apply #'add sllx (subseq front (min i count) (min (+ i n) count)))) ))
+(defmethod sublist* ((l singly-linked-list-x) (start integer) (end integer))
+  (with-slots (front) l
+    (subseq front start end)))
 
 ;;;
 ;;;    Certain operations are marginally faster with doubly-linked-list due to cursor.
@@ -1191,10 +1200,10 @@
 (defclass dcursor ()
   ((node :type (or null dcons dnode))
    (index :initform 0) ; Reader INDEX conflicts with list INDEX method!
-   (head :initarg :head)
-   (size :initarg :size)
-   (next :initarg :next)
-   (previous :initarg :previous))
+   (head :initarg :head :documentation "A function that yields the head node of the associated list.")
+   (size :initarg :size :documentation "A function that returns the size of the associated list.")
+   (next :initarg :next :documentation "A function that returns the node following a given node.")
+   (previous :initarg :previous :documentation "A function the returns the node before a given node."))
   (:documentation "Cursor for circular doubly-linked list."))
 
 (defmethod initialize-instance :after ((c dcursor) &rest initargs)
@@ -1279,33 +1288,6 @@
   ()
   (:documentation "Cursor for circular doubly-linked list. Travels backwards."))
 
-;; (defmethod initialize-instance :after ((c dcursorb) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (node head) c
-;;     (setf node (funcall head)))) ; Empty LIST => (null node)
-
-;; (defun initializedp (cursor)
-;;   (not (null (slot-value cursor 'node))))
-
-;; (defun reset (cursor)
-;;   (with-slots (node index head) cursor
-;;     (setf node (funcall head)
-;;           index 0)))
-
-;; (defun at-start-p (cursor)
-;;   (or (not (initializedp cursor))
-;;       (zerop (slot-value cursor 'index))))
-
-;; (defun at-end-p (cursor)
-;;   (with-slots (index size) cursor
-;;     (or (not (initializedp cursor))
-;;         (= index (1- (funcall size)))) ))
-
-;; (defmethod advance :around ((c dcursorb) &optional step)
-;;   (declare (ignore step))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
 (defmethod advance ((c dcursorb) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
   (with-slots (node index size previous) c
@@ -1314,11 +1296,6 @@
              (setf node (funcall previous node)))
     (setf index (mod index (funcall size)))) )
 
-;; (defmethod rewind :around ((c dcursorb) &optional step)
-;;   (declare (ignore step))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
 (defmethod rewind ((c dcursorb) &optional (step 1))
   (assert (plusp step) () "STEP must be a positive value: ~A" step)
   (with-slots (node index size next) c
@@ -1327,21 +1304,9 @@
              (setf node (funcall next node)))
     (setf index (mod index (funcall size)))) )
 
-;; (defmethod bump :around ((c dcursorb))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
 (defmethod bump ((c dcursorb))
   (with-slots (node previous) c
     (setf node (funcall previous node))))
-
-;; (defmethod nudge :around ((c dcursorb))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
-;; (defmethod nudge ((c dcursorb))
-;;   (with-slots (index) c
-;;     (incf index)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -1604,7 +1569,7 @@
 ;;         (return i)))) )
 
 ;; (defmethod slice ((l doubly-linked-list-old) (i integer) (n integer))
-;;   (labels ((dsubseq (start end)
+;;   (labels ((sublist* (start end)
 ;;              (loop for dcons = (nth-dcons-old l start) then (next dcons)
 ;;                    for i from start below end
 ;;                    collect (content dcons))))
@@ -1614,29 +1579,29 @@
 ;;                        (let ((j (+ i count)))
 ;;                          (if (minusp j)
 ;;                              '()
-;;                              (dsubseq j (min (+ j n) count))))
-;;                        (dsubseq (min i count) (min (+ i n) count)))) )
+;;                              (sublist* j (min (+ j n) count))))
+;;                        (sublist* (min i count) (min (+ i n) count)))) )
 ;;         (apply #'add dll slice)
 ;;         dll))))
 
 ;; (defmethod slice ((l doubly-linked-list-old) (i integer) (n integer))
-;;   (labels ((dsubseq (start end)
+;;   (labels ((sublist* (start end)
 ;;              (loop for dcons = (nth-dcons-old l start) then (next dcons)
 ;;                    for i from start below end
 ;;                    collect (content dcons))))
 ;;     (with-slots (type count fill-elt) l
 ;;       (let ((dll (make-doubly-linked-list-old :type type :fill-elt fill-elt)))
-;;         (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))
+;;         (apply #'add dll (sublist* (min i count) (min (+ i n) count)))
 ;;         dll))))
 
 (defmethod slice ((l doubly-linked-list-old) (i integer) &optional n)
-  (labels ((dsubseq (start end)
+  (labels ((sublist* (start end)
              (loop for dcons = (nth-dcons-old l start) then (next dcons)
                    for i from start below end
                    collect (content dcons))))
     (with-slots (type count fill-elt) l
       (let ((dll (make-doubly-linked-list-old :type type :fill-elt fill-elt)))
-        (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))) )))
+        (apply #'add dll (sublist* (min i count) (min (+ i n) count)))) )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1644,22 +1609,129 @@
 ;;;    Take two. Only one cursor.
 ;;;    - Can't make doubly-linked tree? CONTENT of DCONS is singly-linked.
 ;;;    
-(defclass doubly-linked-list (mutable-linked-list)
-  ((store :initform nil)
-   (count :initform 0)
-   (cursor :documentation "Floating cursor. May simplify access based on previous access."))
+(defclass dcursor-list (mutable-linked-list)
+  ((cursor :documentation "Floating cursor. May simplify access based on previous access."))
   (:documentation "Circular doubly-linked list."))
 
-(defmethod initialize-instance :after ((l doubly-linked-list) &rest initargs)
+(defmethod initialize-instance :after ((l dcursor-list) &rest initargs)
   (declare (ignore initargs))
   (with-slots (cursor) l
     (setf cursor (setup-cursor l))))
 
+(defgeneric setup-cursor (doubly-linked-list)
+  (:documentation "Setup code specific to the DLL."))
+
+(defgeneric nth-dll-node (list n)
+  (:documentation "Return the nth node of LIST taking advantage of cursor if possible."))
+
+;;;
+;;;    This is the critical function to determine the quickest way
+;;;    to locate the desired node.
+;;;    Functions that call NTH-DLL-NODE may accept a negative index. Such
+;;;    an index must be offset before calling NTH-DLL-NODE.
+;;;    - Try to use previous accesses in ballpark of current access.
+;;;    - Try to put cursor in ballpark of future accesses (e.g., i = 0)
+;;;
+
+(labels ((reposition-cursor (cursor i count)
+           (with-slots (index) cursor ; ???
+             (declare (integer index))
+             (cond ((zerop i) (reset cursor))
+                   ((< i index)
+                    (let ((index-delta (- index i))
+                          (start-delta i))
+                      (cond ((< start-delta index-delta) ; I.e., i - 0 < index - i
+                             (reset cursor)
+                             (advance cursor start-delta))
+                            (t (rewind cursor index-delta)))) )
+                   ((> i index)
+                    (let ((index-delta (- i index))
+                          (end-delta (- count i)))
+                      (cond ((<= index-delta end-delta)
+                             (advance cursor index-delta))
+                            (t (reset cursor)
+                               (rewind cursor end-delta)))) )))))
+  (defmethod nth-dll-node ((list dcursor-list) (n integer))
+    (if (emptyp list)
+        (error "List is empty")
+        (with-slots (cursor) list
+          (let ((count (size list)))
+            (declare (integer count))
+            (assert (and (>= n 0) (< n count)) () "Invalid index: ~D" n)
+            (with-slots (node) cursor ; ????
+              (reposition-cursor cursor n count)
+              node)))) ))
+
+(defmethod nth ((l dcursor-list) (i integer))
+  (content (nth-dll-node l i)))
+
+(defmethod (setf nth) (obj (l dcursor-list) (i integer))
+  (setf (content (nth-dll-node l i)) obj))
+
+(defmethod add :after ((l dcursor-list) &rest objs)
+  (declare (ignore objs))
+  (with-slots (cursor) l
+    (unless (initializedp cursor)
+      (reset cursor))))
+
+(defmethod insert :after ((l dcursor-list) (i integer) obj)
+  (declare (ignore obj))
+  (with-slots (cursor) l
+    (with-slots (index) cursor ; ???
+      (when (or (not (initializedp cursor))
+                (<= 0 i index)
+                (and (minusp i) (<= 0 (+ i (size l)) index)))
+        (reset cursor)))) )
+
+(defmethod delete :after ((l dcursor-list) (i integer))
+  (declare (ignore i))
+  (with-slots (cursor) l
+    (reset cursor)))
+
+;;;
+;;;    Position of the LIST's DCURSOR is independent of the NODE located by list iterator's ADD-BEFORE.
+;;;    Furthermore, we don't know the index of the NODE. If DCURSOR's index is before NODE, then it
+;;;    need not be adjusted. If equal or after, it must be incremented. But we can't tell...
+;;;    
+(defmethod insert-before :after ((l dcursor-list) node obj)
+  (declare (ignore node obj))
+  (with-slots (cursor) l
+    (reset cursor)))
+
+(defmethod insert-after :after ((l dcursor-list) node obj)
+  (declare (ignore node obj))
+  (with-slots (cursor) l
+    (reset cursor))) ; Same issue as above with INSERT-BEFORE!!!
+
+(defmethod delete-node :after ((l dcursor-list) (doomed dcons))
+  (declare (ignore doomed))
+  (with-slots (cursor) l
+    (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
+
+(defmethod delete-child :after ((l dcursor-list) (parent dcons))
+  (declare (ignore parent))
+  (with-slots (cursor) l
+    (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
+
+(defclass doubly-linked-list (dcursor-list)
+  ((store :initform nil)
+   (count :initform 0))
+  (:documentation "Circular doubly-linked list."))
+
+;;;
+;;;    Another compromise as with NTH-DCONS. Must allow DOUBLY-LINKED-LIST-RATCHET to override.
+;;;    
+(defmethod setup-cursor ((dll doubly-linked-list))
+  (with-slots (store count) dll
+    (make-instance 'dcursor
+                   :head #'(lambda () store)
+                   :size #'(lambda () count)
+                   :next #'next
+                   :previous #'previous)))
+
 (defun make-doubly-linked-list (&key (type t) (fill-elt nil))
   (make-instance 'doubly-linked-list :type type :fill-elt fill-elt))
 
-(defgeneric make-empty-list (l)
-  (:documentation "Return an empty list similar to L."))
 (defmethod make-empty-list ((l doubly-linked-list))
   (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l)))
 
@@ -1714,19 +1786,6 @@
 ;;                      :start start
 ;;                      :initialize #'(lambda () (setup-cursor l))
 ;;                      :modification-count #'(lambda () modification-count)))) )
-
-;;;
-;;;    Another compromise as with NTH-DCONS. Must allow DOUBLY-LINKED-LIST-RATCHET to override.
-;;;    
-(defgeneric setup-cursor (doubly-linked-list)
-  (:documentation "Setup code specific to the DLL."))
-(defmethod setup-cursor ((dll doubly-linked-list))
-  (with-slots (store count) dll
-    (make-instance 'dcursor
-                   :head #'(lambda () store)
-                   :size #'(lambda () count)
-                   :next #'next
-                   :previous #'previous)))
 
 (defmethod iterator ((l doubly-linked-list))
   (with-slots (modification-count) l
@@ -1822,220 +1881,26 @@
               (t (dlink (previous store) dcons)))
         (add-nodes dcons (rest objs)))) )
   l)
-(defmethod add :after ((l doubly-linked-list) &rest objs)
-  (declare (ignore objs))
-  (with-slots (cursor) l
-    (unless (initializedp cursor)
-      (reset cursor))))
-
-;;;
-;;;    This is the critical function to determine the quickest way
-;;;    to locate the desired node.
-;;;    Functions that call NTH-DCONS may accept a negative index. Such
-;;;    an index must be offset before calling NTH-DCONS.
-;;;    - Try to use previous accesses in ballpark of current access.
-;;;    - Try to put cursor in ballpark of future accesses (e.g., i = 0)
-;;;
-;; (flet ((nth-dcons (list i)
-;;          (declare (integer i))
-;;          (with-slots (store count cursor) list
-;;            (declare (integer count))
-;; ;    (assert (typep i `(integer 0 (,count))) () "Invalid index: ~D" i)
-;;            (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
-;;            (if (emptyp list)
-;;                (error "List is empty")
-;;                (with-slots (index node) cursor
-;;                  (declare (integer index))
-;;                  (cond ((zerop i) store)
-;;                        ((= i index) node)
-;;                        ((< i (/ index 2)) ; I.e., i - 0 < index - i
-;;                         (reset cursor)
-;;                         (advance cursor i)
-;;                         node)
-;;                        ((< i index)
-;;                         (rewind cursor (- index i))
-;;                         node)
-;;                        ;;((<= i (/ (+ count index) 2))
-;;                        ((<= (- i index) (- count i))
-;;                         (advance cursor (- i index))
-;;                         node)
-;;                        (t (reset cursor)
-;;                           (rewind cursor (- count i))
-;;                           node)))) )))
-;; (flet ((nth-dcons (list i)
-;;          (declare (integer i))
-;;          (with-slots (store count cursor) list
-;;            (declare (integer count))
-;;            (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
-;;            (if (emptyp list)
-;;                (error "List is empty")
-;;                (with-slots (index node) cursor
-;;                  (declare (integer index))
-;;                  (cond ((zerop i) store)
-;;                        ((= i index) node)
-;;                        ((< i index)
-;;                         (let ((index-delta (- index i)))
-;;                           (cond ((< i index-delta) ; I.e., i - 0 < index - i
-;;                                  (reset cursor)
-;;                                  (advance cursor i)
-;;                                  node)
-;;                                 (t (rewind cursor index-delta)
-;;                                    node))))
-;;                        (t (let ((index-delta (- i index))
-;;                                 (count-delta (- count i)))
-;;                             (cond ((<= index-delta count-delta)
-;;                                    (advance cursor index-delta)
-;;                                    node)
-;;                                   (t (reset cursor)
-;;                                      (rewind cursor count-delta)
-;;                                      node)))) )))) ))
-;; (labels ((nth-dcons (list i)
-;;            (declare (integer i))
-;;            (if (emptyp list)
-;;                (error "List is empty")
-;;                (with-slots (count cursor) list
-;;                  (declare (integer count))
-;;                  (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
-;;                  (with-slots (node) cursor ; ????
-;;                    (reposition-cursor cursor i count)
-;;                    node))))
-;;          (reposition-cursor (cursor i count)
-;;            (with-slots (index) cursor ; ???
-;;              (declare (integer index))
-;;              (cond ((zerop i) (reset cursor))
-;;                    ((< i index)
-;;                     (let ((index-delta (- index i)))
-;;                       (cond ((< i index-delta) ; I.e., i - 0 < index - i
-;;                              (reset cursor)
-;;                              (advance cursor i))
-;;                             (t (rewind cursor index-delta)))) )
-;;                    ((> i index)
-;;                     (let ((index-delta (- i index))
-;;                           (count-delta (- count i)))
-;;                       (cond ((<= index-delta count-delta)
-;;                              (advance cursor index-delta))
-;;                             (t (reset cursor)
-;;                                (rewind cursor count-delta)))) )))) )
-;;   (defmethod insert ((l doubly-linked-list) (i integer) obj)
-;;     (with-slots (store) l
-;;       (splice-before (nth-dcons l i) obj)
-;;       (when (zerop i)
-;;         (setf store (previous store)))) )
-;;   (defmethod insert :after ((l doubly-linked-list) (i integer) obj)
-;;     (declare (ignore obj))
-;;     (with-slots (count cursor) l
-;;       (incf count)
-;;       (with-slots (index) cursor ; ???
-;;         (when (or (not (initializedp cursor))
-;;                   (<= 0 i index)
-;;                   (and (minusp i) (<= 0 (+ i count) index)))
-;;           (reset cursor)))) )
-;;   (defmethod delete ((l doubly-linked-list) (i integer))
-;;     (delete-dcons l (nth-dcons l i)))
-;;   (defmethod delete :after ((l doubly-linked-list) (i integer))
-;;     (declare (ignore i))
-;;     (with-slots (count cursor) l
-;;       (decf count)
-;;       (reset cursor)))
-;;   (defmethod nth ((l doubly-linked-list) (i integer))
-;;     (with-slots (store count) l
-;;       (content (nth-dcons l i))))
-;;   (defmethod (setf nth) (obj (l doubly-linked-list) (i integer))
-;;     (with-slots (store) l
-;;       (setf (content (nth-dcons l i)) obj)))
-;;   ;; (defmethod slice ((l doubly-linked-list) (i integer) (n integer))
-;;   ;;   (labels ((dsubseq (start end)
-;;   ;;              (loop for i from start below end
-;;   ;;                    for dcons = (nth-dcons l start) then (next dcons)
-;;   ;;                    collect (content dcons))))
-;;   ;;     (with-slots (count) l
-;;   ;;       (let ((dll (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l))))
-;;   ;;         (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))
-;;   ;;         dll)))) )
-;;   (defmethod slice ((l doubly-linked-list) (i integer) &optional n)
-;;     (labels ((dsubseq (start end)
-;;                (loop for i from start below end
-;;                      for dcons = (nth-dcons l start) then (next dcons)
-;;                      collect (content dcons))))
-;;       (with-slots (count) l
-;;         (let ((dll (make-doubly-linked-list :type (type l) :fill-elt (fill-elt l))))
-;;           (apply #'add dll (dsubseq (min i count) (min (+ i n) count)))) ))))
-
-;;;
-;;;    This is a compromise. I want NTH-DCONS to be private, but I want to share it with
-;;;    DOUBLY-LINKED-LIST-RATCHET... (and DOUBLY-LINKED-LIST-HASH-TABLE)
-;;;    
-(labels ((reposition-cursor (cursor i count)
-           (with-slots (index) cursor ; ???
-             (declare (integer index))
-             (cond ((zerop i) (reset cursor))
-                   ((< i index)
-                    (let ((index-delta (- index i))
-                          (start-delta i))
-                      (cond ((< start-delta index-delta) ; I.e., i - 0 < index - i
-                             (reset cursor)
-                             (advance cursor start-delta))
-                            (t (rewind cursor index-delta)))) )
-                   ((> i index)
-                    (let ((index-delta (- i index))
-                          (end-delta (- count i)))
-                      (cond ((<= index-delta end-delta)
-                             (advance cursor index-delta))
-                            (t (reset cursor)
-                               (rewind cursor end-delta)))) )))))
-  (defun nth-dll-node (list n)
-    (declare (integer n))
-    (if (emptyp list)
-        (error "List is empty")
-        (with-slots (cursor) list
-          (let ((count (size list)))
-            (declare (integer count))
-            (assert (and (>= n 0) (< n count)) () "Invalid index: ~D" n)
-            (with-slots (node) cursor ; ????
-              (reposition-cursor cursor n count)
-              node)))) ))
 
 ;;;
 ;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
 ;;;    superclass :AFTER methods from incrementing MODIFICATION-COUNT twice! 见 SINGLY-LINKED-LIST
 ;;;    
 (defmethod insert ((l doubly-linked-list) (i integer) obj)
-  (with-slots (store) l
+  (with-slots (store count) l
     (splice-before (nth-dll-node l i) obj)
+    (incf count) ; Can't be :AFTER method since they are executed superclass down...
     (when (zerop i)
       (setf store (previous store)))) )
-(defmethod insert :after ((l doubly-linked-list) (i integer) obj)
-  (declare (ignore obj))
-  (with-slots (count cursor) l
-    (incf count)
-    (with-slots (index) cursor ; ???
-      (when (or (not (initializedp cursor))
-                (<= 0 i index)
-                (and (minusp i) (<= 0 (+ i count) index)))
-        (reset cursor)))) )
 
 (defmethod delete ((l doubly-linked-list) (i integer))
   (delete-dcons l (nth-dll-node l i)))
 (defmethod delete :after ((l doubly-linked-list) (i integer))
   (declare (ignore i))
-  (with-slots (count cursor) l
-    (decf count)
-    (reset cursor)))
-
-(defmethod nth ((l doubly-linked-list) (i integer))
-  (content (nth-dll-node l i)))
-
-(defmethod (setf nth) (obj (l doubly-linked-list) (i integer))
-  (setf (content (nth-dll-node l i)) obj))
-
-(defmethod slice ((l doubly-linked-list) (i integer) &optional n)
   (with-slots (count) l
-    (let ((dll (make-empty-list l)))
-      (apply #'add dll (dsubseq l (min i count) (min (+ i n) count)))) ))
+    (decf count)))
 
-(defgeneric dsubseq (l start end)
-  (:documentation "Return a subsequence of list L determined by bounding indices START and END."))
-(defmethod dsubseq ((l doubly-linked-list) (start integer) (end integer))
+(defmethod sublist* ((l doubly-linked-list) (start integer) (end integer))
   (loop for i from start below end
         for dcons = (nth-dll-node l start) then (next dcons)
         collect (content dcons)))
@@ -2076,24 +1941,16 @@
       (setf store (previous store)))) )
 (defmethod insert-before :after ((l doubly-linked-list) node obj)
   (declare (ignore node obj))
-  (with-slots (count cursor) l
-    (incf count)
-    (reset cursor)))
-;;;
-;;;    Position of the LIST's DCURSOR is independent of the NODE located by list iterator's ADD-BEFORE.
-;;;    Furthermore, we don't know the index of the NODE. If DCURSOR's index is before NODE, then it
-;;;    need not be adjusted. If equal or after, it must be incremented. But we can't tell...
-;;;    
-
+  (with-slots (count) l
+    (incf count)))
 
 (defmethod insert-after ((l doubly-linked-list) node obj)
   (declare (ignore l))
   (splice-after node obj))
 (defmethod insert-after :after ((l doubly-linked-list) node obj)
   (declare (ignore node obj))
-  (with-slots (count cursor) l
-    (incf count)
-    (reset cursor))) ; Same issue as above with INSERT-BEFORE!!!
+  (with-slots (count) l
+    (incf count)))
 
 ;;;
 ;;;    Confirm that DOOMED is actually a node in this list!
@@ -2106,9 +1963,8 @@
   (delete-dcons l doomed))
 (defmethod delete-node :after ((l doubly-linked-list) (doomed dcons))
   (declare (ignore doomed))
-  (with-slots (count cursor) l
-    (decf count)
-    (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
+  (with-slots (count) l
+    (decf count)))
 
 (defun delete-dcons (l doomed)
   (with-slots (store) l
@@ -2131,9 +1987,8 @@
           (excise-child parent)))) )
 (defmethod delete-child :after ((l doubly-linked-list) (parent dcons))
   (declare (ignore parent))
-  (with-slots (count cursor) l
-    (decf count)
-    (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
+  (with-slots (count) l
+    (decf count)))
 
 ;; (defmethod index ((l doubly-linked-list) obj &key (test #'eql))
 ;;   (with-slots (store count) l
@@ -2166,371 +2021,19 @@
 ;;;    3. Move store to last node when reversed. Simply index in the other direction. This requires
 ;;;       a different DCURSOR due to observation above. Everything else is simpler though.
 ;;;       
-;; (defclass doubly-linked-list-ratchet (mutable-linked-list)
-;;   ((store :initform nil)
-;;    (count :initform 0)
-;;    (direction :initform :forward :initarg :direction)
-;;    (cursor :documentation "Floating cursor. May simplify access based on previous access."))
-;;   (:documentation "Circular doubly-linked list."))
-
-;; (defun ratchet-forward (list node)
-;;   (with-slots (direction) list
-;;     (ecase direction
-;;       (:forward (next node))
-;;       (:backward (previous node)))) )
-
-;; (defun (setf ratchet-forward) (obj list node)
-;;   (with-slots (direction) list
-;;     (ecase direction
-;;       (:forward (setf (next node) obj))
-;;       (:backward (setf (previous node) obj)))) )
-
-;; (defun ratchet-backward (list node)
-;;   (with-slots (direction) list
-;;     (ecase direction
-;;       (:forward (previous node))
-;;       (:backward (next node)))) )
-
-;; (defun (setf ratchet-backward) (obj list node)
-;;   (with-slots (direction) list
-;;     (ecase direction
-;;       (:forward (setf (previous node) obj))
-;;       (:backward (setf (next node) obj)))) )
-
-;; (defun ratchet-dlink (list node1 node2)
-;;   (with-slots (direction) list
-;;     (ecase direction
-;;       (:forward (dlink node1 node2))
-;;       (:backward (dlink node2 node1)))) )
-  
-;; ;; *
-;; ;; (defun make-doubly-linked-list-ratchet-cursor (list dcursor)
-;; ;;   (let ((sealed-for-your-protection t))
-;; ;;     (make-instance 'cursor
-;; ;;                    :done #'(lambda ()
-;; ;;                              (or (not (initializedp dcursor))
-;; ;;                                  (and (not sealed-for-your-protection) (at-start-p dcursor))))
-;; ;;                    :current #'(lambda ()
-;; ;;                                 (with-slots (node) dcursor
-;; ;;                                   (content node)))
-;; ;;                    :advance #'(lambda ()
-;; ;;                                 (advance dcursor)
-;; ;;                                 ;; (with-slots (direction) list
-;; ;;                                 ;;   (ecase direction
-;; ;;                                 ;;     (:forward (advance dcursor))
-;; ;;                                 ;;     (:backward (rewind dcursor))))
-;; ;;                                 (setf sealed-for-your-protection nil)))) )
-
-;; (flet ((setup-cursor (dllr)
-;;          (with-slots (store count direction) dllr
-;;            (make-instance (ecase direction
-;;                             (:forward 'dcursor)
-;;                             (:backward 'dcursorb))
-;;                           :head #'(lambda () store)
-;;                           :size #'(lambda () count)))) )
-;;   (defmethod initialize-instance :after ((l doubly-linked-list-ratchet) &rest initargs)
-;;     (declare (ignore initargs))
-;;     (with-slots (cursor) l
-;;       (setf cursor (setup-cursor l))))
-;;   (defmethod iterator ((l doubly-linked-list-ratchet))
-;;     (with-slots (modification-count) l
-;;       (make-instance 'mutable-collection-iterator
-;;                      :modification-count #'(lambda () modification-count)
-;;                      :cursor (make-doubly-linked-list-cursor (setup-cursor l)))) )
-;; ;                     :cursor (make-doubly-linked-list-ratchet-cursor l (setup-cursor l)))) )
-;;   (defmethod list-iterator ((l doubly-linked-list-ratchet) &optional (start 0))
-;;     (with-slots (modification-count) l
-;;       (make-instance 'doubly-linked-list-list-iterator
-;;                      :list l
-;;                      :start start
-;;                      :initialize #'(lambda () (setup-cursor l))
-;;                      :modification-count #'(lambda () modification-count))))
-;;   (defmethod reverse ((l doubly-linked-list-ratchet))
-;;     (unless (emptyp l)
-;;       (with-slots (store cursor direction) l
-;;         (ecase direction
-;;           (:forward (setf direction :backward))
-;;           (:backward (setf direction :forward)))
-;;         (setf store (ratchet-forward l store)
-;;               cursor (setup-cursor l)))) ))
-
-;; (defun make-doubly-linked-list-ratchet (&key (type t) (fill-elt nil))
-;;   (make-instance 'doubly-linked-list-ratchet :type type :fill-elt fill-elt))
-
-;; (defmethod size ((l doubly-linked-list-ratchet))
-;;   (slot-value l 'count))
-
-;; (defmethod emptyp ((l doubly-linked-list-ratchet))
-;;   (null (slot-value l 'store)))
-
-;; (defmethod clear ((l doubly-linked-list-ratchet))
-;;   (unless (emptyp l)
-;;     (with-slots (store count cursor direction) l
-;;       (loop repeat count
-;;             for dcons = store then (ratchet-forward l dcons)
-;;             do (setf (ratchet-backward l dcons) nil))
-;;       (setf (ratchet-forward l store) nil
-;;             store nil
-;;             count 0)
-;; ;            direction :forward)
-;;       (reset cursor))))
-
-;; ;; (defmethod contains ((l doubly-linked-list-ratchet) obj &key (test #'eql))
-;; ;;   ;; (with-slots (store count) l
-;; ;;   ;;   (labels ((find-obj (dcons i)
-;; ;;   ;;              (cond ((= i count) nil)
-;; ;;   ;;                    ((funcall test obj (content dcons)) (content dcons))
-;; ;;   ;;                    (t (find-obj (ratchet-forward l dcons) (1+ i)))) ))
-;; ;;   ;;     (find-obj store 0))))
-;; ;;   (do ((iterator (iterator l)))
-;; ;;       ((done iterator) nil)
-;; ;;     (let ((elt (current iterator)))
-;; ;;       (if (funcall test obj elt)
-;; ;;           (return elt)
-;; ;;           (next iterator)))) )
-
-;; (defmethod add ((l doubly-linked-list-ratchet) &rest objs)
-;;   (with-slots (store count) l
-;;     (labels ((add-nodes (start elts)
-;;                (loop for dcons = start then (ratchet-forward l dcons)
-;;                      for i from 1
-;;                      for elt in elts
-;;                      do (ratchet-dlink l dcons (make-instance 'dcons :content elt))
-;;                      finally (progn (ratchet-dlink l dcons store)
-;;                                     (incf count i)))) )
-;;       (let ((dcons (make-instance 'dcons :content (first objs))))
-;;         (cond ((emptyp l) (setf store dcons))
-;;               (t (ratchet-dlink l (ratchet-backward l store) dcons)))
-;;         (add-nodes dcons (rest objs)))) )
-;;   l)
-;; (defmethod add :after ((l doubly-linked-list-ratchet) &rest objs)
-;;   (declare (ignore objs))
-;;   (with-slots (cursor) l
-;;     (unless (initializedp cursor)
-;;       (reset cursor))))
-
-;; ;; (labels ((nth-dll-node (list i)
-;; ;;            (declare (integer i))
-;; ;;            (if (emptyp list)
-;; ;;                (error "List is empty")
-;; ;;                (with-slots (count cursor) list
-;; ;;                  (declare (integer count))
-;; ;;                  (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
-;; ;;                  (with-slots (node index) cursor ; ????
-;; ;; (format t "> ~D~%" index)
-;; ;;                    (reposition-cursor list cursor i)
-;; ;; (format t "> ~D~%" index)
-;; ;;                    node))))
-;; ;;          (ratchet-advance (list cursor i)
-;; ;;            (with-slots (direction) list
-;; ;;              (ecase direction
-;; ;;                (:forward (advance cursor i))
-;; ;;                (:backward (rewind cursor i)))) )
-;; ;;          (ratchet-rewind (list cursor i)
-;; ;;            (with-slots (direction) list
-;; ;;              (ecase direction
-;; ;;                (:forward (rewind cursor i))
-;; ;;                (:backward (advance cursor i)))) )
-;; ;;          (ratchet-< (list &rest vals)
-;; ;;            (with-slots (direction) list
-;; ;;              (ecase direction
-;; ;;                (:forward (apply #'< vals))
-;; ;;                (:backward (apply #'> vals)))) )
-;; ;;          (ratchet-> (list x y)
-;; ;;            (with-slots (direction) list
-;; ;;              (ecase direction
-;; ;;                (:forward (> x y))
-;; ;;                (:backward (< x y)))) )
-;; ;;          (ratchet-<= (list &rest vals)
-;; ;;            (or (apply #'= vals)
-;; ;;                (apply #'ratchet-< list vals)))
-;; ;;          (reposition-cursor (list cursor i)
-;; ;;            (with-slots (count) list
-;; ;;              (with-slots (index) cursor ; ???
-;; ;;                (declare (integer index))
-;; ;;                (cond ((zerop i) (reset cursor))
-;; ;;                      ((ratchet-< list i index)
-;; ;;                       (let ((index-delta (- index i)))
-;; ;;                         (cond ((ratchet-< list i index-delta) ; I.e., i - 0 < index - i
-;; ;;                                (reset cursor)
-;; ;;                                (ratchet-advance list cursor i))
-;; ;;                               (t (ratchet-rewind list cursor index-delta)))) )
-;; ;;                      ((ratchet-> list i index)
-;; ;;                       (let ((index-delta (- i index))
-;; ;;                             (count-delta (- count i)))
-;; ;;                         (cond ((ratchet-<= list index-delta count-delta)
-;; ;;                                (ratchet-advance list cursor index-delta))
-;; ;;                               (t (reset cursor)
-;; ;;                                  (ratchet-rewind list cursor count-delta)))) )))) ))
-;; (labels ((nth-dll-node (list i)
-;;            (declare (integer i))
-;;            (if (emptyp list)
-;;                (error "List is empty")
-;;                (with-slots (count cursor) list
-;;                  (declare (integer count))
-;;                  (assert (and (>= i 0) (< i count)) () "Invalid index: ~D" i)
-;;                  (with-slots (node) cursor ; ????
-;;                    (reposition-cursor cursor i count)
-;;                    node))))
-;;          (reposition-cursor (cursor i count)
-;;            (with-slots (index) cursor ; ???
-;;              (declare (integer index))
-;;              (cond ((zerop i) (reset cursor))
-;;                    ((< i index)
-;;                     (let ((index-delta (- index i)))
-;;                       (cond ((< i index-delta) ; I.e., i - 0 < index - i
-;;                              (reset cursor)
-;;                              (advance cursor i))
-;;                             (t (rewind cursor index-delta)))) )
-;;                    ((> i index)
-;;                     (let ((index-delta (- i index))
-;;                           (count-delta (- count i)))
-;;                       (cond ((<= index-delta count-delta)
-;;                              (advance cursor index-delta))
-;;                             (t (reset cursor)
-;;                                (rewind cursor count-delta)))) )))) )
-;;   (defmethod insert ((l doubly-linked-list-ratchet) (i integer) obj)
-;;     (with-slots (store direction) l
-;;       (ecase direction
-;;         (:forward (splice-before (nth-dll-node l i) obj))
-;;         (:backward (splice-after (nth-dll-node l i) obj)))
-;;       (when (zerop i)
-;;         (setf store (ratchet-backward l store)))) )
-;;   (defmethod insert :after ((l doubly-linked-list-ratchet) (i integer) obj)
-;;     (declare (ignore obj))
-;;     (with-slots (count cursor) l
-;;         (incf count)
-;;         (with-slots (index) cursor ; ???
-;;           (when (or (not (initializedp cursor))
-;;                     (<= 0 i index) ; ???
-;;                     (and (minusp i) (<= 0 (+ i count) index))))  ; ???
-;;             (reset cursor))))
-;;   (defmethod delete ((l doubly-linked-list-ratchet) (i integer))
-;;     (delete-dcons l (nth-dll-node l i))) ; ??
-;;   (defmethod delete :after ((l doubly-linked-list-ratchet) (i integer))
-;;     (declare (ignore i))
-;;     (with-slots (count cursor) l
-;;       (decf count)
-;;       (reset cursor)))
-;;   (defmethod nth ((l doubly-linked-list-ratchet) (i integer))
-;;     (with-slots (store count) l
-;;       (content (nth-dll-node l i))))
-;;   (defmethod (setf nth) (obj (l doubly-linked-list-ratchet) (i integer))
-;;     (with-slots (store) l
-;;       (setf (content (nth-dll-node l i)) obj)))
-;;   (defmethod slice ((l doubly-linked-list-ratchet) (i integer) &optional n)
-;;     (labels ((dsubseq (start end)
-;;                (loop for i from start below end
-;;                      for dcons = (nth-dll-node l start) then (ratchet-forward l dcons)
-;;                      collect (content dcons))))
-;;       (with-slots (count direction) l
-;;         (let ((dllr (make-instance 'doubly-linked-list-ratchet
-;;                                    :type (type l)
-;;                                    :fill-elt (fill-elt l)
-;;                                    :direction direction)))
-;;           (apply #'add dllr (dsubseq (min i count) (min (+ i n) count)))) ))))
-
-;; (defmethod insert-before ((l doubly-linked-list-ratchet) node obj)
-;;   (with-slots (store direction) l
-;;     (ecase direction
-;;       (:forward (splice-before node obj))
-;;       (:backward (splice-after node obj)))
-;;     (when (eq store node)
-;;       (setf store (ratchet-backward l store)))) )
-;; (defmethod insert-before :after ((l doubly-linked-list-ratchet) node obj)
-;;   (declare (ignore node obj))
-;;   (with-slots (count cursor) l
-;;     (incf count)
-;;     (reset cursor)))
-
-;; (defmethod insert-after ((l doubly-linked-list-ratchet) node obj)
-;;   (with-slots (direction) l
-;;     (ecase direction
-;;       (:forward (splice-after node obj))
-;;       (:backward (splice-before node obj)))) )
-;; (defmethod insert-after :after ((l doubly-linked-list-ratchet) node obj)
-;;   (declare (ignore node obj))
-;;   (with-slots (count cursor) l
-;;     (incf count)
-;;     (reset cursor))) ; Same issue as above with INSERT-BEFORE!!!
-
-;; (defmethod delete-node ((l doubly-linked-list-ratchet) (doomed dcons))
-;;   (delete-dcons l doomed))
-;; (defmethod delete-node :after ((l doubly-linked-list-ratchet) (doomed dcons))
-;;   (declare (ignore doomed))
-;;   (with-slots (count cursor) l
-;;     (decf count)
-;;     (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
-
-;; ;;;
-;; ;;;    This still works reversed.
-;; ;;;    
-;; ;; (defun delete-dcons (l doomed)
-;; ;;   (with-slots (store) l
-;; ;;     (cond ((eq doomed (ratchet-forward l doomed)) ; Single-elt
-;; ;;            (prog1 (content doomed)
-;; ;;              (setf (ratchet-forward l doomed) nil ; Free for GC!
-;; ;;                    store '())))
-;; ;;           (t (prog1 (excise-node doomed)
-;; ;;                (when (eq doomed store) ; First elt otherwise
-;; ;;                  (setf store (ratchet-forward l doomed)))) ))))
-
-;; (defmethod delete-child ((l doubly-linked-list-ratchet) (parent dcons))
-;;   ;; (flet ((excise-child-ratchet (parent)
-;;   ;;          (let ((child (ratchet-forward l parent)))
-;;   ;;            (if (eq parent child)
-;;   ;;                (error "Parent must have child node")
-;;   ;;                (prog1 (content child)
-;;   ;;                  (ratchet-dlink l parent (ratchet-forward l child)))) )))
-;;   (with-slots (store) l
-;;     (let ((child (ratchet-forward l parent)))
-;;       (if (eq child store) ; True for last node and single-elt list.
-;;           (error "Parent must have child node")
-;;           (prog1 (content child)
-;;             (ratchet-dlink l parent (ratchet-forward l child)))) )))
-;; ;            (excise-child-ratchet parent)))) ))
-;; (defmethod delete-child :after ((l doubly-linked-list-ratchet) (doomed dcons))
-;;   (declare (ignore doomed))
-;;   (with-slots (count cursor) l
-;;     (decf count)
-;;     (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
-
-;; ;; (defmethod index ((l doubly-linked-list-ratchet) obj &key (test #'eql))
-;; ;;   ;; (with-slots (store count) l
-;; ;;   ;;   (labels ((find-obj (dcons i)
-;; ;;   ;;              (cond ((= i count) nil)
-;; ;;   ;;                    ((funcall test obj (content dcons)) i)
-;; ;;   ;;                    (t (find-obj (ratchet-forward l dcons) (1+ i)))) ))
-;; ;;   ;;     (find-obj store 0))))
-;; ;;   (do ((iterator (iterator l))
-;; ;;        (i 0 (1+ i)))
-;; ;;       ((done iterator) nil)
-;; ;;     (let ((elt (current iterator)))
-;; ;;       (if (funcall test obj elt)
-;; ;;           (return i)
-;; ;;           (next iterator)))) )
-
-;; ;; modification-count??
-;; ;; (defmethod reverse ((l doubly-linked-list-ratchet))
-;; ;;   (unless (emptyp l)
-;; ;;     (with-slots (store cursor direction) l
-;; ;;       (ecase direction
-;; ;;         (:forward (setf direction :backward
-;; ;;                         store (previous store)))
-;; ;;         (:backward (setf direction :forward
-;; ;;                          store (next store))))
-;; ;;       (reset cursor))))
-;; ;; (defmethod reverse ((l doubly-linked-list-ratchet))
-;; ;;   (unless (emptyp l)
-;; ;;     (with-slots (cursor direction) l
-;; ;;       (ecase direction
-;; ;;         (:forward (setf direction :backward))
-;; ;;         (:backward (setf direction :forward)))
-;; ;;       (reset cursor))))
-
 (defclass doubly-linked-list-ratchet (doubly-linked-list)
   ((direction :initform :forward :initarg :direction))
   (:documentation "Reversible circular doubly-linked list."))
+
+(defmethod setup-cursor ((dllr doubly-linked-list-ratchet))
+  (with-slots (store count direction) dllr
+    (make-instance (ecase direction
+                     (:forward 'dcursor)
+                     (:backward 'dcursorb))
+                   :head #'(lambda () store)
+                   :size #'(lambda () count)
+                   :next #'next
+                   :previous #'previous)))
 
 (defun make-doubly-linked-list-ratchet (&key (type t) (fill-elt nil) (direction :forward))
   (make-instance 'doubly-linked-list-ratchet :type type :fill-elt fill-elt :direction direction))
@@ -2569,16 +2072,6 @@
       (:forward (dlink node1 node2))
       (:backward (dlink node2 node1)))) )
   
-(defmethod setup-cursor ((dllr doubly-linked-list-ratchet))
-  (with-slots (store count direction) dllr
-    (make-instance (ecase direction
-                     (:forward 'dcursor)
-                     (:backward 'dcursorb))
-                   :head #'(lambda () store)
-                   :size #'(lambda () count)
-                   :next #'next
-                   :previous #'previous)))
-
 (defmethod reverse ((l doubly-linked-list-ratchet))
   (with-slots (store cursor direction) l
     (ecase direction
@@ -2618,14 +2111,15 @@
   l)
 
 (defmethod insert ((l doubly-linked-list-ratchet) (i integer) obj)
-    (with-slots (store direction) l
+    (with-slots (store direction count) l
       (ecase direction
         (:forward (splice-before (nth-dll-node l i) obj))
         (:backward (splice-after (nth-dll-node l i) obj)))
+      (incf count) ; Can't be :AFTER method since they are executed superclass down...
       (when (zerop i)
         (setf store (ratchet-backward l store)))) )
 
-(defmethod dsubseq ((l doubly-linked-list-ratchet) (start integer) (end integer))
+(defmethod sublist* ((l doubly-linked-list-ratchet) (start integer) (end integer))
   (loop for i from start below end
         for dcons = (nth-dll-node l start) then (ratchet-forward l dcons)
         collect (content dcons)))
@@ -2681,66 +2175,6 @@
   (make-instance 'dnode :content obj))
 
 ;;;
-;;;    Reconcile with DCURSOR!
-;;;    Too much duplication, partial reuse...
-;;;    
-;; (defclass dnode-cursor ()
-;;   ((node :type (or null dnode))
-;;    (index :initform 0) ; Reader INDEX conflicts with list INDEX method!
-;;    (head :initarg :head)
-;;    (size :initarg :size)
-;;    (next :initarg :next)
-;;    (previous :initarg :previous))
-;;   (:documentation "Cursor for circular doubly-linked list."))
-
-;; (defmethod initialize-instance :after ((c dnode-cursor) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (node head) c
-;;     (setf node (funcall head)))) ; Empty LIST => (null node)
-
-;; (defmethod advance :around ((c dnode-cursor) &optional step)
-;;   (declare (ignore step))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
-;; (defmethod advance ((c dnode-cursor) &optional (step 1))
-;;   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-;;   (with-slots (node index size next) c
-;;     (loop repeat step
-;;           do (incf index)
-;;              (setf node (funcall next node)))
-;;     (setf index (mod index (funcall size)))) )
-
-;; (defmethod rewind :around ((c dnode-cursor) &optional step)
-;;   (declare (ignore step))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
-;; (defmethod rewind ((c dnode-cursor) &optional (step 1))
-;;   (assert (plusp step) () "STEP must be a positive value: ~A" step)
-;;   (with-slots (node index size previous) c
-;;     (loop repeat step
-;;           do (decf index)
-;;              (setf node (funcall previous node)))
-;;     (setf index (mod index (funcall size)))) )
-
-;; (defmethod bump :around ((c dnode-cursor))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
-;; (defmethod bump ((c dnode-cursor))
-;;   (with-slots (node next) c
-;;     (setf node (funcall next node))))
-
-;; (defmethod nudge :around ((c dnode-cursor))
-;;   (if (initializedp c)
-;;       (call-next-method)
-;;       (error "Cursor has not been initialized")))
-;; (defmethod nudge ((c dnode-cursor))
-;;   (with-slots (index) c
-;;     (incf index)))
-
-;;;
 ;;;    In the DLLs above, the structure is in the nodes themselves. Here only the
 ;;;    list is aware of the structure. Consequently, the list itself must usually
 ;;;    be passed as an argument when examining or manipulating the structure.
@@ -2748,17 +2182,24 @@
 ;;;    Nodes cannot simply be the objects they contain. This would preclude duplicate
 ;;;    elements in the list. There must be an additional wrapper that makes each element unique.
 ;;;    
-(defclass doubly-linked-list-hash-table (mutable-linked-list)
+(defclass doubly-linked-list-hash-table (dcursor-list)
   ((head :initform nil :type (or null dnode))
    (forward :initform (make-hash-table))
-   (backward :initform (make-hash-table))
-   (cursor :documentation "Floating cursor. May simplify access based on previous access."))
+   (backward :initform (make-hash-table)))
   (:documentation "Doubly-linked list built from hash tables."))
 
-(defmethod initialize-instance :after ((l doubly-linked-list-hash-table) &rest initargs)
-  (declare (ignore initargs))
-  (with-slots (cursor) l
-    (setf cursor (setup-cursor l))))
+;; (defmethod initialize-instance :after ((l doubly-linked-list-hash-table) &rest initargs)
+;;   (declare (ignore initargs))
+;;   (with-slots (cursor) l
+;;     (setf cursor (setup-cursor l))))
+
+(defmethod setup-cursor ((dll doubly-linked-list-hash-table))
+  (with-slots (head) dll
+    (make-instance 'dcursor
+                   :head #'(lambda () head)
+                   :size #'(lambda () (size dll))
+                   :next #'(lambda (node) (next-dnode dll node))
+                   :previous #'(lambda (node) (previous-dnode dll node)))) )
 
 (defun make-doubly-linked-list-hash-table (&key (type t) (fill-elt nil))
   (make-instance 'doubly-linked-list-hash-table :type type :fill-elt fill-elt))
@@ -2829,34 +2270,11 @@
       (clrhash backward)
       (reset cursor))))
 
-(defmethod setup-cursor ((dll doubly-linked-list-hash-table))
-  (with-slots (head) dll
-    (make-instance 'dcursor
-                   :head #'(lambda () head)
-                   :size #'(lambda () (size dll))
-                   :next #'(lambda (node) (next-dnode dll node))
-                   :previous #'(lambda (node) (previous-dnode dll node)))) )
-
-(defun make-doubly-linked-list-hash-table-cursor (l)
-  (with-slots (head) l
-    (let ((sealed-for-your-protection t)
-          (cursor (setup-cursor l)))
-      (make-instance 'cursor
-                     :done #'(lambda ()
-                               (or (not (initializedp cursor)) ; ?? Empty list??  AT-START-P is sufficient
-                                   (and (not sealed-for-your-protection) (at-start-p cursor))))
-                     :current #'(lambda ()
-                                  (with-slots (node) cursor ; ???
-                                    (content node)))
-                     :advance #'(lambda ()
-                                  (advance cursor)
-                                  (setf sealed-for-your-protection nil)))) ))
-
 (defmethod iterator ((l doubly-linked-list-hash-table))
   (with-slots (modification-count) l
     (make-instance 'mutable-collection-iterator
                    :modification-count #'(lambda () modification-count)
-                   :cursor (make-doubly-linked-list-hash-table-cursor l))))
+                   :cursor (make-doubly-linked-list-cursor (setup-cursor l)))))
 
 (defmethod list-iterator ((l doubly-linked-list-hash-table) &optional (start 0))
   (with-slots (modification-count) l
@@ -2873,53 +2291,17 @@
                      for i from 1
                      for elt in elts
                      do (link-dnodes l dnode (make-node elt))
-                     finally (progn (link-dnodes l dnode head)))) )
+                     finally (link-dnodes l dnode head))))
       (let ((dnode (make-node (first objs))))
         (cond ((emptyp l) (setf head dnode))
               (t (link-dnodes l (previous-dnode l head) dnode)))
         (add-nodes dnode (rest objs)))) )
   l)
-(defmethod add :after ((l doubly-linked-list-hash-table) &rest objs)
-  (declare (ignore objs))
-  (with-slots (cursor) l
-    (unless (initializedp cursor)
-      (reset cursor))))
-
-;; (labels ((reposition-cursor (cursor i count)
-;;            (with-slots (index) cursor ; ???
-;;              (declare (integer index))
-;;              (cond ((zerop i) (reset cursor))
-;;                    ((< i index)
-;;                     (let ((index-delta (- index i)))
-;;                       (cond ((< i index-delta) ; I.e., i - 0 < index - i
-;;                              (reset cursor)
-;;                              (advance cursor i))
-;;                             (t (rewind cursor index-delta)))) )
-;;                    ((> i index)
-;;                     (let ((index-delta (- i index))
-;;                           (count-delta (- count i)))
-;;                       (cond ((<= index-delta count-delta)
-;;                              (advance cursor index-delta))
-;;                             (t (reset cursor)
-;;                                (rewind cursor count-delta)))) )))))
-;;   (defun nth-dnode (list i)
-;;     (declare (integer i))
-;;     (if (emptyp list)
-;;         (error "List is empty")
-;;         (with-slots (cursor) list
-;;           (assert (and (>= i 0) (< i (size list))) () "Invalid index: ~D" i)
-;;           (with-slots (node index) cursor ; ????
-;; ;(print index)
-;;             (reposition-cursor cursor i (size list))
-;; ;(print index)
-;;             node)))) )
-;;     ;; (with-slots (head forward) l
-;;     ;;   (loop for node = head then (next-dnode l node)
-;;     ;;         for j below (size l)
-;;     ;;         when (= i j)
-;;     ;;         do (return node)
-;;     ;;         finally (error "Invalid index: ~D" i)))) )
-
+;; (defmethod add :after ((l doubly-linked-list-hash-table) &rest objs)
+;;   (declare (ignore objs))
+;;   (with-slots (cursor) l
+;;     (unless (initializedp cursor)
+;;       (reset cursor))))
 
 ;;;
 ;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
@@ -2930,34 +2312,11 @@
     (splice-dnode-before l (nth-dll-node l i) obj)
     (when (zerop i)
       (setf head (previous-dnode l head)))) )
-(defmethod insert :after ((l doubly-linked-list-hash-table) (i integer) obj)
-  (declare (ignore obj))
-  (with-slots (cursor) l
-    (with-slots (index) cursor ; ???
-      (when (or (not (initializedp cursor))
-                (<= 0 i index)
-                (and (minusp i) (<= 0 (+ i (size l)) index)))
-        (reset cursor)))) )
 
 (defmethod delete ((l doubly-linked-list-hash-table) (i integer))
   (delete-dnode l (nth-dll-node l i)))
-(defmethod delete :after ((l doubly-linked-list-hash-table) (i integer))
-  (declare (ignore i))
-  (with-slots (cursor) l
-    (reset cursor)))
 
-(defmethod nth ((l doubly-linked-list-hash-table) (i integer))
-  (content (nth-dll-node l i)))
-
-(defmethod (setf nth) (obj (l doubly-linked-list-hash-table) (i integer))
-  (setf (content (nth-dll-node l i)) obj))
-
-(defmethod slice ((l doubly-linked-list-hash-table) (i integer) &optional n)
-  (let ((dll (make-empty-list l))
-        (count (size l)))
-    (apply #'add dll (dsubseq l (min i count) (min (+ i n) count)))) )
-
-(defmethod dsubseq ((l doubly-linked-list-hash-table) (start integer) (end integer))
+(defmethod sublist* ((l doubly-linked-list-hash-table) (start integer) (end integer))
   (loop for i from start below end
         for dnode = (nth-dll-node l start) then (next-dnode l dnode)
         collect (content dnode)))
@@ -2973,23 +2332,9 @@
     (splice-dnode-before l node obj)
     (when (eq head node)
       (setf head (previous-dnode l head)))) )
-(defmethod insert-before :after ((l doubly-linked-list-hash-table) node obj)
-  (declare (ignore node obj))
-  (with-slots (cursor) l
-    (reset cursor)))
-;;;
-;;;    Position of the LIST's DCURSOR is independent of the NODE located by list iterator's ADD-BEFORE.
-;;;    Furthermore, we don't know the index of the NODE. If DCURSOR's index is before NODE, then it
-;;;    need not be adjusted. If equal or after, it must be incremented. But we can't tell...
-;;;    
-
 
 (defmethod insert-after ((l doubly-linked-list-hash-table) node obj)
   (splice-dnode-after l node obj))
-(defmethod insert-after :after ((l doubly-linked-list-hash-table) node obj)
-  (declare (ignore node obj))
-  (with-slots (cursor) l
-    (reset cursor))) ; Same issue as above with INSERT-BEFORE!!!
 
 ;;;
 ;;;    Confirm that DOOMED is actually a node in this list!
@@ -3000,10 +2345,6 @@
 ;;;    
 (defmethod delete-node ((l doubly-linked-list-hash-table) (doomed dnode))
   (delete-dnode l doomed))
-(defmethod delete-node :after ((l doubly-linked-list-hash-table) (doomed dnode))
-  (declare (ignore doomed))
-  (with-slots (cursor) l
-    (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
 
 (defun delete-dnode (l doomed)
   (with-slots (head forward backward) l
@@ -3028,10 +2369,6 @@
           (prog1 (excise-child-dnode l parent)
             (remhash child forward)
             (remhash child backward)))) ))
-(defmethod delete-child :after ((l doubly-linked-list-hash-table) (parent dnode))
-  (declare (ignore parent))
-  (with-slots (cursor) l
-    (reset cursor))) ; NTH-DLL-NODE moves cursor in most cases?
 
 (defmethod reverse ((l doubly-linked-list-hash-table))
   (with-slots (head forward backward cursor) l
@@ -3063,6 +2400,9 @@
 
 (defun make-hash-table-list (&key (type t) (fill-elt nil))
   (make-instance 'hash-table-list :type type :fill-elt fill-elt))
+
+(defmethod make-empty-list ((l hash-table-list))
+  (make-hash-table-list :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod size ((l hash-table-list))
   (with-slots (store) l
@@ -3146,19 +2486,6 @@
 ;;       (when (funcall test obj (nth l i))
 ;;         (return i)))) )
 
-;; (defmethod slice ((l hash-table-list) (i integer) (n integer))
-;;   (with-slots (store) l
-;;     (let ((htl (make-hash-table-list :type (type l) :fill-elt (fill-elt l)))
-;;           (count (size l)))
-;; ;      (apply #'add htl (loop for k from (min i count) below (min (+ i n) count) collect (gethash k store)))
-;;       (apply #'add htl (loop for k from (min i count) below (min (+ i n) count) collect (nth l k)))
-;;       htl)))
-
-(defmethod slice ((l hash-table-list) (i integer) &optional n)
-  (let ((htl (make-hash-table-list :type (type l) :fill-elt (fill-elt l)))
-        (count (size l)))
-    (apply #'add htl (loop for j from (min i count) below (min (+ i n) count) collect (nth l j)))) )
-
 ;;;
 ;;;    HASH-TABLE-LIST-X
 ;;;    - A second hash-table EROTS is used to keep a reverse map of values to keys in
@@ -3202,6 +2529,10 @@
 
 (defun make-hash-table-list-x (&key (type t) (fill-elt nil) (test #'eql))
   (make-instance 'hash-table-list-x :type type :fill-elt fill-elt :test test))
+
+(defmethod make-empty-list ((l hash-table-list-x))
+  (with-slots (store) l
+    (make-hash-table-list-x :type (type l) :fill-elt (fill-elt l) :test (hash-table-test store))))
 
 (defmethod size ((l hash-table-list-x))
   (with-slots (store) l
@@ -3307,20 +2638,6 @@
                (when (funcall test obj (nth l i))
                  (return i)))) )))
 
-;; (defmethod slice ((l hash-table-list-x) (i integer) (n integer))
-;;   (with-slots (store) l
-;;     (let ((htlx (make-hash-table-list-x :type (type l) :fill-elt (fill-elt l) :test (hash-table-test store)))
-;;           (count (size l)))
-;; ;      (apply #'add htlx (loop for k from (min i count) below (min (+ i n) count) collect (gethash k store)))
-;;       (apply #'add htlx (loop for k from (min i count) below (min (+ i n) count) collect (nth l k)))
-;;       htlx)))
-
-(defmethod slice ((l hash-table-list-x) (i integer) &optional n)
-  (with-slots (store) l
-    (let ((htlx (make-hash-table-list-x :type (type l) :fill-elt (fill-elt l) :test (hash-table-test store)))
-          (count (size l)))
-      (apply #'add htlx (loop for j from (min i count) below (min (+ i n) count) collect (nth l j)))) ))
-
 ;;;
 ;;;    HASH-TABLE-LIST-Z
 ;;;    - Similar to ARRAY-LIST-X w/ OFFSET
@@ -3331,6 +2648,9 @@
 
 (defun make-hash-table-list-z (&key (type t) (fill-elt nil))
   (make-instance 'hash-table-list-z :type type :fill-elt fill-elt))
+
+(defmethod make-empty-list ((l hash-table-list-z))
+  (make-hash-table-list-z :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod size ((l hash-table-list-z))
   (with-slots (store offset) l
@@ -3423,19 +2743,6 @@
 ;;       (when (funcall test obj (nth l i))
 ;;         (return i)))) )
 
-;; (defmethod slice ((l hash-table-list-z) (i integer) (n integer))
-;;   (with-slots (store offset) l
-;;     (let ((htlz (make-hash-table-list-z :type (type l) :fill-elt (fill-elt l)))
-;;           (count (size l)))
-;; ;      (apply #'add htlz (loop for k from (min i count) below (min (+ i n) count) collect (gethash (+ k offset) store)))
-;;       (apply #'add htlz (loop for k from (min i count) below (min (+ i n) count) collect (nth l k)))
-;;       htlz)))
-
-(defmethod slice ((l hash-table-list-z) (i integer) &optional n)
-  (let ((htlz (make-hash-table-list-z :type (type l) :fill-elt (fill-elt l)))
-        (count (size l)))
-    (apply #'add htlz (loop for j from (min i count) below (min (+ i n) count) collect (nth l j)))) )
-
 ;;;
 ;;;    PERSISTENT-LIST
 ;;;    - No point in making this a subclass of LINKED-LIST.
@@ -3456,6 +2763,9 @@
 
 (defun make-persistent-list (&key (type t) (fill-elt nil))
   (make-instance 'persistent-list :type type :fill-elt fill-elt))
+
+(defmethod make-empty-list ((l persistent-list))
+  (make-persistent-list :type (type l) :fill-elt (fill-elt l)))
 
 (defmethod print-object ((l persistent-list) stream)
   (print-unreadable-object (l stream :type t)

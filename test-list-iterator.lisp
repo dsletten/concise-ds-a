@@ -237,6 +237,17 @@
 
 ))
 
+(deftest test-doubly-linked-list-hash-table-list-iterator ()
+  (check
+   (test-list-iterator-vs-iterator #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-forward-traversal #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-backward-traversal #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-remove-forward #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-remove-backward #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-remove-inside-out #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-add-before-empty #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
+   (test-add-after-empty #'(lambda () (make-instance 'doubly-linked-list-hash-table)))) )
+
 (deftest test-hash-table-list-list-iterator ()
   (check
    (test-list-iterator-vs-iterator #'(lambda () (make-instance 'hash-table-list)))
@@ -284,6 +295,7 @@
    (test-singly-linked-list-x-list-iterator)
    (test-doubly-linked-list-list-iterator)
    (test-doubly-linked-list-ratchet-list-iterator)
+   (test-doubly-linked-list-hash-table-list-iterator)
    (test-hash-table-list-list-iterator)
    (test-hash-table-list-x-list-iterator)
    (test-hash-table-list-z-list-iterator)))
