@@ -85,8 +85,7 @@
   t)
 
 (defun test-list-contains-predicate (list-constructor)
-  (let ((list (funcall list-constructor)))
-    (apply #'add list #[#\a #\z])
+  (let ((list (apply #'add (funcall list-constructor) #[#\a #\z])))
     (assert (every #'(lambda (ch) (contains list ch)) #[#\a #\z])
             ()
             "Should be matchy matchy.")
@@ -118,12 +117,9 @@
   t)
 
 (defun test-list-equals-predicate (list-constructor)
-  (let ((list (funcall list-constructor))
-        (array-list (make-instance 'array-list))
-        (doubly-linked-list (make-instance 'doubly-linked-list)))
-    (apply #'add list #[#\a #\z])
-    (apply #'add array-list #[#\A #\Z])
-    (apply #'add doubly-linked-list #[#\A #\Z])
+  (let ((list (apply #'add (funcall list-constructor) #[#\a #\z]))
+        (array-list (apply #'add (make-instance 'array-list) #[#\A #\Z]))
+        (doubly-linked-list (apply #'add (make-instance 'doubly-linked-list) #[#\A #\Z])))
     (assert (not (equals list array-list)) () "Default test EQL should fail.")
     (assert (not (equals list doubly-linked-list)) () "Default test EQL should fail.")
     (assert (equals list array-list :test #'char-equal) () "Specific test should succeed.")
@@ -131,9 +127,9 @@
   t)
 
 (defun test-list-each (list-constructor)
-  (let ((list (funcall list-constructor)))
-    (loop for ch in #[#\a #\z]
-          do (add list ch))
+  (let ((list (apply #'add (funcall list-constructor) #[#\a #\z])))
+    ;; (loop for ch in #[#\a #\z]
+    ;;       do (add list ch))
     (let ((result (with-output-to-string (s)
                     (each list #'(lambda (ch) (write-char ch s)))) )
           (expected (coerce #[#\a #\z] 'string)))
@@ -222,7 +218,9 @@
 (defun test-list-setf-nth (list-constructor &optional (count 1000))
   (let ((list (funcall list-constructor)))
     (loop for i from 0 to count
-          do (setf (nth list i) i))
+          do (assert (= (size list) i) () "Prior to SETF size should be ~D not ~D" i (size list))
+             (setf (nth list i) i)
+             (assert (= (size list) (1+ i)) () "After SETF size should be ~D not ~D" (1+ i) (size list)))
     (loop for i from 0 to count
           do (assert (= (nth list i) i) () "Element ~D should have value ~D not ~D" i i (nth list i))))
   t)
@@ -248,9 +246,7 @@
   t)
 
 (defun test-list-index-predicate (list-constructor)
-  (let ((list (funcall list-constructor)))
-    (loop for ch in #[#\a #\z]
-          do (add list ch))
+  (let ((list (apply #'add (funcall list-constructor) #[#\a #\z])))
     (assert (notany #'(lambda (ch) (index list ch)) #[#\A #\Z])
             ()
             "Default test EQL should fail.")
@@ -268,12 +264,21 @@
     
 (defun test-list-slice (list-constructor &optional (count 1000))
   (let* ((list (fill (funcall list-constructor) count))
-         (n (floor count 2))
          (j (floor count 10))
+         (n (floor count 2))
          (slice (slice list j n)))
     (assert (= (size slice) n) () "Slice should contain ~D elements" n)
-    (loop repeat n
-          for i from 0
+    (loop for i below n
+          do (assert (= (nth slice i) (+ i j 1)) () "Element ~D should have value ~D not ~D" i (+ i j 1) (nth slice i))))
+  t)
+
+(defun test-list-slice-negative-index (list-constructor &optional (count 1000))
+  (let* ((list (fill (funcall list-constructor) count))
+         (j (floor count 2))
+         (n (floor count 2))
+         (slice (slice list (- j))))
+    (assert (= (size slice) n) () "Slice should contain ~D elements" n)
+    (loop for i below n
           do (assert (= (nth slice i) (+ i j 1)) () "Element ~D should have value ~D not ~D" i (+ i j 1) (nth slice i))))
   t)
 
@@ -371,6 +376,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'array-list)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'array-list)))
    (test-list-slice #'(lambda () (make-instance 'array-list)))
+   (test-list-slice-negative-index #'(lambda () (make-instance 'array-list)))
    (test-list-slice-corner-cases #'(lambda () (make-instance 'array-list)))
    (test-list-time #'(lambda () (make-instance 'array-list)))
 ;;    (test-wave #'(lambda () (make-instance 'array-list)))) )
@@ -404,6 +410,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'array-list-x)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'array-list-x)))
    (test-list-slice #'(lambda () (make-instance 'array-list-x)))
+   (test-list-slice-negative-index #'(lambda () (make-instance 'array-list-x)))
    (test-list-slice-corner-cases #'(lambda () (make-instance 'array-list-x)))
    (test-list-time #'(lambda () (make-instance 'array-list-x)))) )
 
@@ -435,6 +442,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'singly-linked-list)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'singly-linked-list)))
    (test-list-slice #'make-linked-list)
+   (test-list-slice-negative-index #'(lambda () (make-instance 'singly-linked-list)))
    (test-list-slice-corner-cases #'make-linked-list)
    (test-list-time #'make-linked-list)
 ;;    (test-wave #'(lambda () (make-instance 'singly-linked-list)))) )
@@ -451,7 +459,7 @@
    (test-list-equals-predicate #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-contains #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-contains-predicate #'(lambda () (make-instance 'singly-linked-list-x)))
-   (test-list-contains-arithmetic #'(lambda () (make-instance 'singly-linked-list)))
+   (test-list-contains-arithmetic #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-add #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-insert #'(lambda (&key fill-elt) (make-instance 'singly-linked-list-x :fill-elt fill-elt)))
    (test-list-insert-fill-zero #'(lambda (&key fill-elt) (make-instance 'singly-linked-list-x :fill-elt fill-elt)))
@@ -466,8 +474,9 @@
    (test-list-setf-nth-negative-index #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-index #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-index-predicate #'(lambda () (make-instance 'singly-linked-list-x)))
-   (test-list-index-arithmetic #'(lambda () (make-instance 'singly-linked-list)))
+   (test-list-index-arithmetic #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-slice #'make-linked-list-x)
+   (test-list-slice-negative-index #'(lambda () (make-instance 'singly-linked-list-x)))
    (test-list-slice-corner-cases #'make-linked-list-x)
    (test-list-time #'make-linked-list-x)))
 
@@ -499,6 +508,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'doubly-linked-list)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'doubly-linked-list)))
    (test-list-slice #'make-doubly-linked-list)
+   (test-list-slice-negative-index #'(lambda () (make-instance 'doubly-linked-list)))
    (test-list-slice-corner-cases #'make-doubly-linked-list)
    (test-list-time #'make-doubly-linked-list)
 ;;    (test-wave #'(lambda () (make-instance 'doubly-linked-list)))) )
@@ -532,6 +542,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'doubly-linked-list-ratchet :direction :backward)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'doubly-linked-list-ratchet :direction :backward)))
    (test-list-slice #'(lambda () (make-instance 'doubly-linked-list-ratchet :direction :backward)))
+   (test-list-slice-negative-index #'(lambda () (make-instance 'doubly-linked-list-ratchet)))
    (test-list-slice-corner-cases #'(lambda () (make-instance 'doubly-linked-list-ratchet :direction :backward)))
    (test-list-time #'make-doubly-linked-list-ratchet)
 ;;    (test-wave #'(lambda () (make-instance 'doubly-linked-list-ratchet)))) )
@@ -565,6 +576,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
    (test-list-slice #'make-doubly-linked-list-hash-table)
+   (test-list-slice-negative-index #'(lambda () (make-instance 'doubly-linked-list-hash-table)))
    (test-list-slice-corner-cases #'make-doubly-linked-list-hash-table)
    (test-list-time #'make-doubly-linked-list-hash-table)
 ;;    (test-wave #'(lambda () (make-instance 'doubly-linked-list-hash-table)))) )
@@ -598,6 +610,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'hash-table-list)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'hash-table-list)))
    (test-list-slice #'(lambda () (make-instance 'hash-table-list)))
+   (test-list-slice-negative-index #'(lambda () (make-instance 'hash-table-list)))
    (test-list-slice-corner-cases #'(lambda () (make-instance 'hash-table-list)))
    (test-list-time #'(lambda () (make-instance 'hash-table-list)))
 ;;    (test-wave #'(lambda () (make-instance 'hash-table-list)))) )
@@ -631,6 +644,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'hash-table-list-x)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'hash-table-list-x)))
    (test-list-slice #'(lambda () (make-instance 'hash-table-list-x)))
+   (test-list-slice-negative-index #'(lambda () (make-instance 'hash-table-list-x)))
    (test-list-slice-corner-cases #'(lambda () (make-instance 'hash-table-list-x)))
    (test-list-time #'(lambda () (make-instance 'hash-table-list-x)))
 ;;    (test-wave #'(lambda () (make-instance 'hash-table-list-x)))) )
@@ -664,6 +678,7 @@
    (test-list-index-predicate #'(lambda () (make-instance 'hash-table-list-z)))
    (test-list-index-arithmetic #'(lambda () (make-instance 'hash-table-list-z)))
    (test-list-slice #'(lambda () (make-instance 'hash-table-list-z)))
+   (test-list-slice-negative-index #'(lambda () (make-instance 'hash-table-list-z)))
    (test-list-slice-corner-cases #'(lambda () (make-instance 'hash-table-list-z)))
    (test-list-time #'(lambda () (make-instance 'hash-table-list-z)))
 ;;    (test-wave #'(lambda () (make-instance 'hash-table-list-z)))) )

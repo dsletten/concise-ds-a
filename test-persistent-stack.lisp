@@ -37,6 +37,14 @@
         for new-stack = (push stack i) then (push new-stack i)   ; ??????? Scope problem without renaming?!??!
         finally (return new-stack)))
 
+;;;
+;;;    Refactor? PERSISTENT-STACK/PERSISTENT-LIST-STACK with common superclass??
+;;;    
+(defmethod fill ((stack persistent-list-stack) &optional (count 1000))
+  (loop for i from 1 to count
+        for new-stack = (push stack i) then (push new-stack i)   ; ??????? Scope problem without renaming?!??!
+        finally (return new-stack)))
+
 (defun test-persistent-stack-constructor (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
@@ -73,27 +81,33 @@
 (defun test-persistent-stack-clear (stack-constructor &optional (count 1000))
   (let ((stack (fill (funcall stack-constructor) count)))
     (assert (not (emptyp stack)) () "Stack should have ~D elements." count)
-    (assert (emptyp (clear stack)) () "Stack should be empty."))
+    (assert (emptyp (clear stack)) () "Stack should be empty.")
+    (assert (zerop (size (clear stack))) () "Size of stack should be 0."))
   t)
 
 (defun test-persistent-stack-pop (stack-constructor &optional (count 1000))
   (let ((stack (fill (funcall stack-constructor) count)))
     (loop for i from (size stack) downto 1
           for (new-stack popped) = (multiple-value-list (pop stack)) then (multiple-value-list (pop new-stack)) 
-          unless (= i popped)
-          do (error "Wrong value on stack: ~A should be: ~A~%" popped i)
+          do (assert (= i popped) () "Wrong value on stack: ~A should be: ~A~%" popped i)
           finally (assert (emptyp new-stack) () "Stack should be empty.")))
   t)
 
 (defun test-persistent-stack-peek (stack-constructor &optional (count 1000))
   (let ((stack (fill (funcall stack-constructor) count)))
     (loop for i from (size stack) downto 1
-          for peek = (peek stack)
-          unless (= i peek)
-          do (error "Wrong value on stack: ~A should be: ~A~%" peek i)
-          do (setf stack (pop stack)))
-    (assert (emptyp stack) () "Stack should be empty."))
+          for top = (peek stack) then (peek new-stack)
+          for new-stack = (pop stack) then (pop new-stack)
+          do (assert (= i top) () "Wrong value on stack: ~A should be: ~A~%" top i)
+          finally (assert (emptyp new-stack) () "Stack should be empty.")))
   t)
+
+(defun test-persistent-stack-time (stack-constructor &optional (count 100000))
+  (let ((stack (funcall stack-constructor)))
+    (time
+     (dotimes (i 10 t)
+       (loop for new-stack = (fill stack count) then (pop new-stack)
+             until (emptyp new-stack)))) ))
 
 (deftest test-persistent-stack ()
   (check
@@ -102,4 +116,21 @@
    (test-persistent-stack-size #'(lambda () (make-instance 'persistent-stack)))
    (test-persistent-stack-clear #'(lambda () (make-instance 'persistent-stack)))
    (test-persistent-stack-pop #'(lambda () (make-instance 'persistent-stack)))
-   (test-persistent-stack-peek #'(lambda () (make-instance 'persistent-stack)))) )
+   (test-persistent-stack-peek #'(lambda () (make-instance 'persistent-stack)))
+   (test-persistent-stack-time #'(lambda () (make-instance 'persistent-stack)))) )
+
+(deftest test-persistent-list-stack ()
+  (check
+   (test-persistent-stack-constructor #'(lambda () (make-instance 'persistent-list-stack)))
+   (test-persistent-stack-emptyp #'(lambda () (make-instance 'persistent-list-stack)))
+   (test-persistent-stack-size #'(lambda () (make-instance 'persistent-list-stack)))
+   (test-persistent-stack-clear #'(lambda () (make-instance 'persistent-list-stack)))
+   (test-persistent-stack-pop #'(lambda () (make-instance 'persistent-list-stack)))
+   (test-persistent-stack-peek #'(lambda () (make-instance 'persistent-list-stack)))
+   (test-persistent-stack-time #'(lambda () (make-instance 'persistent-list-stack)))) )
+
+(deftest test-persistent-stack-all ()
+  (check
+   (test-persistent-stack)
+   (test-persistent-list-stack)))
+   

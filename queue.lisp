@@ -58,8 +58,13 @@
 ;;;;
 ;;;;    Fox does not emphasize how a list can be used to implement a queue.
 ;;;;    见 LINKED-LIST-QUEUE, PERSISTENT-LIST-QUEUE
+;;;;    It is reasonable to implement a linked queue using SINGLY-LINKED-LIST-X.
+;;;;    It is not reasonable to implement a persistent queue using PERSISTENT-LIST!
+;;;;    ENQUEUE is way too inefficient. 见 test cases.
 ;;;;
 ;;;;    DEQUE inherits QUEUE error messages?!
+;;;;
+
 
 (in-package :containers)
 
@@ -514,7 +519,8 @@
            new-queue)))
   (defmethod enqueue ((q persistent-list-queue) obj)
     (with-slots (type list) q
-      (initialize-queue type (add list obj)))) ; Not cheap
+      (initialize-queue type (add list obj)))) ; Not cheap. Particularly since there is no bulk ENQUEUE
+                                        ; as with ADD!
   (defmethod dequeue ((q persistent-list-queue))
     (with-slots (type list) q
       (values (initialize-queue type (delete list 0)) (front q)))) )
