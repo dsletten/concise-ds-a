@@ -450,6 +450,11 @@
    (rear :initform '())
    (count :initform 0 :type integer)))
 
+(defgeneric make-empty-persistent-queue (q)
+  (:documentation "Create an empty persistent queue of a given element type."))
+(defmethod make-empty-persistent-queue ((q persistent-queue))
+  (make-instance 'persistent-queue :type (type q)))
+
 (defmethod size ((q persistent-queue))
   (with-slots (count) q
     count))
@@ -458,25 +463,28 @@
 ;;   (zerop (size q)))
 
 (defmethod clear ((q persistent-queue))
-  (make-instance 'persistent-queue :type (type q)))
+;  (make-instance 'persistent-queue :type (type q)))
+  (make-empty-persistent-queue q))
 
-(flet ((initialize-queue (type front rear count)
-         (let ((new-queue (make-instance 'persistent-queue :type type)))
-           (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
-             (setf new-front front
-                   new-rear rear
-                   new-count count))
-           new-queue)))
-  (defmethod enqueue ((q persistent-queue) obj)
-    (with-slots (type front rear count) q
-      (if (emptyp q)
-          (initialize-queue type (cl:list obj) '() 1)
-          (initialize-queue type front (cons obj rear) (1+ count)))) )
-  (defmethod dequeue ((q persistent-queue))
-    (with-slots (type front rear count) q
-      (if (null (rest front))
-          (values (initialize-queue type (cl:reverse rear) '() (1- count)) (front q))
-          (values (initialize-queue type (rest front) rear (1- count)) (front q)))) ))
+(defun initialize-queue (q front rear count)
+  (let ((new-queue (make-empty-persistent-queue q)))
+    (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
+      (setf new-front front
+            new-rear rear
+            new-count count))
+    new-queue))
+
+(defmethod enqueue ((q persistent-queue) obj)
+  (with-slots (front rear count) q
+    (if (emptyp q)
+        (initialize-queue q (cl:list obj) '() 1)
+        (initialize-queue q front (cons obj rear) (1+ count)))) )
+
+(defmethod dequeue ((q persistent-queue))
+  (with-slots (front rear count) q
+    (if (null (rest front))
+        (values (initialize-queue q (cl:reverse rear) '() (1- count)) (front q))
+        (values (initialize-queue q (rest front) rear (1- count)) (front q)))) )
 
 (defmethod front ((q persistent-queue))
   (with-slots (front) q
@@ -502,6 +510,9 @@
   (defclass persistent-list-queue (queue)
     ((list :initform empty))))
 
+(defmethod make-empty-persistent-queue ((q persistent-list-queue))
+  (make-instance 'persistent-list-queue :type (type q)))
+
 (defmethod size ((q persistent-list-queue))
   (with-slots (list) q
     (size list)))
@@ -512,18 +523,19 @@
 (defmethod clear ((q persistent-list-queue))
   (make-instance 'persistent-list-queue :type (type q)))
 
-(flet ((initialize-queue (type list)
-         (let ((new-queue (make-instance 'persistent-list-queue :type type)))
-           (with-slots ((new-list list)) new-queue
-             (setf new-list list))
-           new-queue)))
-  (defmethod enqueue ((q persistent-list-queue) obj)
-    (with-slots (type list) q
-      (initialize-queue type (add list obj)))) ; Not cheap. Particularly since there is no bulk ENQUEUE
+(defun initialize-list-queue (q list)
+  (let ((new-queue (make-empty-persistent-queue q)))
+    (with-slots ((new-list list)) new-queue
+      (setf new-list list))
+    new-queue))
+
+(defmethod enqueue ((q persistent-list-queue) obj)
+  (with-slots (list) q
+    (initialize-list-queue q (add list obj)))) ; Not cheap. Particularly since there is no bulk ENQUEUE
                                         ; as with ADD!
-  (defmethod dequeue ((q persistent-list-queue))
-    (with-slots (type list) q
-      (values (initialize-queue type (delete list 0)) (front q)))) )
+(defmethod dequeue ((q persistent-list-queue))
+  (with-slots (list) q
+    (values (initialize-list-queue q (delete list 0)) (front q))))
 
 (defmethod front ((q persistent-list-queue))
   (with-slots (list) q
@@ -742,55 +754,40 @@
 ;;;    - Invariant: Tail of FRONT and head of REAR share same first enqueued elt.
 ;;;                 FRONT and REAR only null when deque is empty.
 ;;;
-(defclass persistent-deque (deque)
-  ((front :initform '())
-   (rear :initform '())
-   (count :initform 0 :type integer)))
+(defclass persistent-deque (persistent-queue deque) ())
 
-(defmethod size ((dq persistent-deque))
-  (with-slots (count) dq
-    count))
-
-(defmethod clear ((dq persistent-deque))
+(defmethod make-empty-persistent-queue ((dq persistent-deque))
   (make-instance 'persistent-deque :type (type dq)))
 
-(flet ((initialize-deque (type front rear count)
-         (let ((new-deque (make-instance 'persistent-deque :type type)))
-           (with-slots ((new-front front) (new-rear rear) (new-count count)) new-deque
-             (setf new-front front
-                   new-rear rear
-                   new-count count))
-           new-deque)))
-  (defmethod enqueue ((dq persistent-deque) obj)
-    (with-slots (type front rear count) dq
-      (if (emptyp dq)
-          (initialize-deque type (cl:list obj) (cl:list obj) 1)
-          (initialize-deque type front (cons obj rear) (1+ count)))) )
-  (defmethod enqueue* ((dq persistent-deque) obj)
-    (with-slots (type front rear count) dq
-      (if (emptyp dq)
-          (initialize-deque type (cl:list obj) (cl:list obj) 1)
-          (initialize-deque type (cons obj front) rear (1+ count)))) )
-  (defmethod dequeue ((dq persistent-deque))
-    (with-slots (type front rear count) dq
-      (let ((new-deque (if (null (rest front))
-                           (if (null (rest rear))
-                               (clear dq)
-                               (initialize-deque type (rest (cl:reverse rear)) (cl:list (rear dq)) (1- count)))
-                           (initialize-deque type (rest front) rear (1- count)))) )
-        (values new-deque (front dq)))) )
-  (defmethod dequeue* ((dq persistent-deque))
-    (with-slots (type front rear count) dq
-      (let ((new-deque (if (null (rest rear))
-                           (if (null (rest front))
-                               (clear dq)
-                               (initialize-deque type (cl:list (front dq)) (rest (cl:reverse front)) (1- count)))
-                           (initialize-deque type front (rest rear) (1- count)))) )
-        (values new-deque (rear dq)))) ))
+(defmethod enqueue ((dq persistent-deque) obj)
+  (with-slots (front rear count) dq
+    (if (emptyp dq)
+        (initialize-queue dq (cl:list obj) (cl:list obj) 1)
+        (initialize-queue dq front (cons obj rear) (1+ count)))) )
 
-(defmethod front ((dq persistent-deque))
-  (with-slots (front) dq
-    (first front)))
+(defmethod enqueue* ((dq persistent-deque) obj)
+  (with-slots (front rear count) dq
+    (if (emptyp dq)
+        (initialize-queue dq (cl:list obj) (cl:list obj) 1)
+        (initialize-queue dq (cons obj front) rear (1+ count)))) )
+
+(defmethod dequeue ((dq persistent-deque))
+  (with-slots (front rear count) dq
+    (let ((new-deque (if (null (rest front))
+                         (if (null (rest rear))
+                             (make-empty-persistent-queue dq)
+                             (initialize-queue dq (rest (cl:reverse rear)) (cl:list (rear dq)) (1- count)))
+                         (initialize-queue dq (rest front) rear (1- count)))) )
+      (values new-deque (front dq)))) )
+
+(defmethod dequeue* ((dq persistent-deque))
+  (with-slots (front rear count) dq
+    (let ((new-deque (if (null (rest rear))
+                         (if (null (rest front))
+                             (make-empty-persistent-queue dq)
+                             (initialize-queue dq (cl:list (front dq)) (rest (cl:reverse front)) (1- count)))
+                         (initialize-queue dq front (rest rear) (1- count)))) )
+      (values new-deque (rear dq)))) )
 
 (defmethod rear ((dq persistent-deque))
   (with-slots (rear) dq
@@ -810,48 +807,18 @@
 ;; (defclass persistent-list-deque (deque)
 ;;   ((list :initform nil)))
 
-(let ((empty (make-persistent-list)))
-  (defclass persistent-list-deque (deque)
-    ((list :initform empty))))
+(defclass persistent-list-deque (persistent-list-queue deque) ())
 
-(defmethod size ((dq persistent-list-deque))
-  (with-slots (list) dq
-    (size list)))
-
-(defmethod clear ((dq persistent-list-deque))
+(defmethod make-empty-persistent-queue ((dq persistent-list-deque))
   (make-instance 'persistent-list-deque :type (type dq)))
 
-;; (defmethod enqueue :before ((dq persistent-list-deque) obj)
-;;   (with-slots (type list) dq
-;;     (when (null list)
-;;       (setf list (make-persistent-list :type `(or null ,type)))) ))
-
-;; (defmethod enqueue* :before ((dq persistent-list-deque) obj)
-;;   (with-slots (type list) dq
-;;     (when (null list)
-;;       (setf list (make-persistent-list :type `(or null ,type)))) ))
-
-(flet ((initialize-deque (type list)
-         (let ((new-deque (make-instance 'persistent-list-deque :type type)))
-           (with-slots ((new-list list)) new-deque
-             (setf new-list list))
-           new-deque)))
-  (defmethod enqueue ((dq persistent-list-deque) obj)
-    (with-slots (type list) dq
-      (initialize-deque type (add list obj))))
-  (defmethod enqueue* ((dq persistent-list-deque) obj)
-    (with-slots (type list) dq
-      (initialize-deque type (insert list 0 obj))))
-  (defmethod dequeue ((dq persistent-list-deque))
-    (with-slots (type list) dq
-      (values (initialize-deque type (delete list 0)) (front dq))))
-  (defmethod dequeue* ((dq persistent-list-deque))
-    (with-slots (type list) dq
-      (values (initialize-deque type (delete list -1)) (rear dq)))) )
-
-(defmethod front ((dq persistent-list-deque))
+(defmethod enqueue* ((dq persistent-list-deque) obj)
   (with-slots (list) dq
-    (nth list 0)))
+    (initialize-list-queue dq (insert list 0 obj))))
+
+(defmethod dequeue* ((dq persistent-list-deque))
+  (with-slots (list) dq
+    (values (initialize-list-queue dq (delete list -1)) (rear dq))))
 
 (defmethod rear ((dq persistent-list-deque))
   (with-slots (list) dq

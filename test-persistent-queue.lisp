@@ -68,6 +68,13 @@
     (assert (emptyp (dequeue (enqueue queue t))) () "Empty queue should be empty.")
     t))
 
+(defun test-persistent-deque-emptyp (deque-constructor)
+  (let ((deque (funcall deque-constructor)))
+    (assert (emptyp deque) () "New deque should be empty.")
+    (assert (not (emptyp (enqueue* deque t))) () "Deque with elt should not be empty.")
+    (assert (emptyp (dequeue* (enqueue* deque t))) () "Empty deque should be empty.")
+    t))
+
 (defun test-persistent-queue-size (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
     (assert (zerop (size queue)) () "Size of new queue should be zero.")
@@ -79,7 +86,8 @@
 (defun test-persistent-queue-clear (queue-constructor &optional (count 1000))
   (let ((queue (fill (funcall queue-constructor) count)))
     (assert (not (emptyp queue)) () "Queue should have ~D elements." count)
-    (assert (emptyp (clear queue)) () "Queue should be empty."))
+    (assert (emptyp (clear queue)) () "Queue should be empty.")
+    (assert (zerop (size (clear queue))) () "Size of queue should be 0."))
   t)
 
 (defun test-persistent-queue-dequeue (queue-constructor &optional (count 1000))
@@ -101,7 +109,8 @@
     (assert (emptyp queue) () "Queue should be empty."))
   t)
 
-(defun test-persistent-queue-time (queue-constructor &optional (count 100000))
+;(defun test-persistent-queue-time (queue-constructor &optional (count 100000))
+(defun test-persistent-queue-time (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
     (time
      (dotimes (i 10 t)
@@ -128,10 +137,35 @@
    (test-persistent-queue-front #'(lambda () (make-instance 'persistent-list-queue)))
    (test-persistent-queue-time #'(lambda () (make-instance 'persistent-list-queue)))) ) ; So slow?!?!
 
+(deftest test-persistent-deque ()
+  (check
+   (test-persistent-queue-constructor #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-queue-emptyp #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-deque-emptyp #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-queue-size #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-queue-clear #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-queue-dequeue #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-queue-front #'(lambda () (make-instance 'persistent-deque)))
+   (test-persistent-queue-time #'(lambda () (make-instance 'persistent-deque)))) )
+
+(deftest test-persistent-list-deque ()
+  (check
+   (test-persistent-queue-constructor #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-queue-emptyp #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-deque-emptyp #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-queue-size #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-queue-clear #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-queue-dequeue #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-queue-front #'(lambda () (make-instance 'persistent-list-deque)))
+   (test-persistent-queue-time #'(lambda () (make-instance 'persistent-list-deque)))) )
+
 (deftest test-persistent-queue-all ()
   (check
    (test-persistent-queue)
-   (test-persistent-list-queue)))
+   (test-persistent-list-queue)
+   (test-persistent-deque)
+   (test-persistent-list-deque)))
+   
 ; DEQUE
 
 
