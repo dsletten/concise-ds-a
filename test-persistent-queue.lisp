@@ -31,9 +31,19 @@
 (use-package :test)
 
 (defmethod fill ((queue persistent-queue) &optional (count 1000))
-  (loop for i from 1 to count
-        for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
-        finally (return new-queue)))
+  (labels ((fill-er-up (q i)
+             (if (> i count)
+                 q
+                 (fill-er-up (enqueue q i) (1+ i)))) )
+    (fill-er-up queue 1)))
+
+;; (defmethod fill ((queue persistent-queue) &optional (count 1000))
+;;   (do* ((i 1 (1+ i))
+;;         (new-queue (enqueue queue i) (enqueue new-queue i)))
+;;        ((= i count) new-queue)))
+;;   ;; (loop for i from 1 to count
+;;   ;;       for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
+;;   ;;       finally (return new-queue)))
 
 ;;;
 ;;;    See test-persistent-stack.lisp
