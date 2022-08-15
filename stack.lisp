@@ -24,6 +24,8 @@
 ;;;;   Notes:
 ;;;;    Fox does not emphasize how a list can be used to implement a stack.
 ;;;;    见 SINGLY-LINKED-LIST-STACK, PERSISTENT-LIST-STACK
+;;;;
+;;;;    Experiment with pre-allocated linked-stack??
 ;;;;    
 
 (in-package :containers)
