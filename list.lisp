@@ -233,7 +233,7 @@
 ;;;    and spills over to the unit tests (TEST-CONSTRUCTOR).
 ;;;    
 (defgeneric delete (list i)
-  (:documentation "Delete the object at the given index."))
+  (:documentation "Delete from the list the object at the given index."))
 (defmethod delete :around ((l list) (i integer))
   (cond ((emptyp l) (error "List is empty")) ; This is wrong????
         ((minusp i)
@@ -1104,6 +1104,10 @@
 (defun dlink (previous next)
   (setf (next previous) next
         (previous next) previous))
+
+(defun unlink (dcons)
+  (setf (next dcons) nil
+        (previous dcons) nil))
 
 (defmethod splice-before ((node dcons) obj)
   (let ((new-dcons (make-instance 'dcons :content obj)))
@@ -1988,15 +1992,19 @@
   (with-slots (count) l
     (decf count)))
 
-(defun delete-dcons (l doomed)
+;;;
+;;;    :BACKWARD DOUBLY-LINKED-LIST-RATCHET must choose different node for STORE
+;;;    when first element is removed.
+;;;    
+(defun delete-dcons (l doomed &optional (reset-store #'next))
   (with-slots (store) l
     (cond ((eq doomed (next doomed)) ; Single-elt
            (prog1 (content doomed)
-             (setf (next doomed) nil ; Free for GC!
-                   store '())))
+             (unlink doomed) ; Free for GC!
+             (setf store '())))
           (t (prog1 (excise-node doomed)
                (when (eq doomed store) ; First elt otherwise
-                 (setf store (next doomed)))) ))))
+                 (setf store (funcall reset-store doomed)))) ))))
 
 ;;;
 ;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST.
@@ -2145,6 +2153,12 @@
       (setf store (ratchet-backward l store)))
     (incf count))) ; Can't be :AFTER method since they are executed superclass down...
 
+(defmethod delete ((l doubly-linked-list-ratchet) (i integer))
+  (with-slots (direction) l
+    (ecase direction
+      (:forward (delete-dcons l (nth-dll-node l i) #'next))
+      (:backward (delete-dcons l (nth-dll-node l i) #'previous)))) )
+
 (defmethod insert-before ((l doubly-linked-list-ratchet) node obj)
   (with-slots (store direction) l
     (ecase direction
@@ -2158,6 +2172,12 @@
     (ecase direction
       (:forward (splice-after node obj))
       (:backward (splice-before node obj)))) )
+
+(defmethod delete-node ((l doubly-linked-list-ratchet) (doomed dcons))
+  (with-slots (direction) l
+    (ecase direction
+      (:forward (delete-dcons l doomed #'next))
+      (:backward (delete-dcons l doomed #'previous)))) )
 
 ;;;
 ;;;    DELETE-CHILD not really necessary for DOUBLY-LINKED-LIST-RATCHET.
