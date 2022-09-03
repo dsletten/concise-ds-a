@@ -54,6 +54,7 @@
 ;;;;      ✓ Encapsulated by closure!
 ;;;;    ✓ Refactor ERROR messages...
 ;;;;    - Other API methods: APPEND, REVERSE, ...
+;;;;    - INSERT same as SETF NTH??
 ;;;;
 
 
@@ -184,6 +185,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;Structural modification;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
+;;;    SETF NTH can extend too?! See note at MUTABLE-LIST class definition.
+;;;    
 ;;;    See semantics of https://docs.oracle.com/en/java/javase/12/docs/api/java.base/java/util/Collection.html#add(E)
 ;;;    Regarding return value. --Optionally return the list itself??
 ;;;    - Should be part of COLLECTION interface?
@@ -210,6 +213,8 @@
 ;;;      beyond start of list. The obvious choice is to not insert anything.
 ;;;      The less obvious choice involves PERSISTENT-LISTs. What should be returned?
 ;;;      I am modelling INSERT after DELETE, which simply returns the list "as is".
+;;;    - For all non-linked implementations, INSERT winds up calling SETF NTH. Duplicate check on
+;;;      type, etc...
 ;;;    
 (defgeneric insert (list i obj)
   (:documentation "Insert the object at the given index. List is extended as necessary."))
@@ -263,6 +268,9 @@
   (declare (ignore l i))
   (error "LIST does not implement NTH"))
 
+;;;
+;;;    Same as INSERT?!?
+;;;    
 (defgeneric (setf nth) (obj list i)
   (:documentation "Assign the object at the given index."))
 (defmethod (setf nth) :around (obj (l list) (i integer))
@@ -524,13 +532,13 @@
 (defgeneric shift-down (list low &optional high)
   (:documentation "Shift elements in the list down starting from LOW."))
 
-(defmethod shift-up ((l array-list) (low integer) &optional high)
+(defmethod shift-up ((l array-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
     (setf (subseq store (1+ low)) (subseq store low high))))
     
-(defmethod shift-down ((l array-list) (low integer) &optional high)
+(defmethod shift-down ((l array-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
-    (setf (subseq store low) (subseq store (1+ low) high))) )
+    (setf (subseq store (1- low)) (subseq store low high))))
     
 ;;;
 ;;;    i < -size => error or no effect?
@@ -541,16 +549,12 @@
   (with-slots (store) l
     (vector-push-extend (fill-elt l) store)
     (shift-up l i)
-;    (setf (subseq store (1+ i)) (subseq store i)
-;          (aref store i) obj)))
     (setf (nth l i) obj)))
 
 (defmethod delete ((l array-list) (i integer))
   (with-slots (store) l
-;    (prog1 (aref store i)
     (prog1 (nth l i)
-      (shift-down l i)
-;      (setf (subseq store i) (subseq store (1+ i)))
+      (shift-down l (1+ i))
       (vector-pop store))))
 
 (defmethod nth ((l array-list) (i integer))
@@ -583,16 +587,8 @@
 ;;;    - Must release deleted elts to allow GC.
 ;;;    - More complicated indexing!
 ;;;    
-;; (defclass array-list-x (mutable-list)
-;;   ((store)
-;;    (offset :initform 0 :type integer)))
 (defclass array-list-x (array-list)
   ((offset :initform 0 :type integer)))
-
-;; (defmethod initialize-instance :after ((l array-list-x) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (store) l
-;;     (setf store (make-array 20 :adjustable t :fill-pointer 0 :element-type (type l)))) )
 
 (defun make-array-list-x (&key (type t) (fill-elt nil))
  (make-instance 'array-list-x :type type :fill-elt fill-elt))
@@ -604,88 +600,65 @@
   (with-slots (store offset) l
     (- (length store) offset)))
 
-;; (defmethod emptyp ((l array-list-x))
-;;   (zerop (size l)))
+;; (defmethod clear ((l array-list-x))
+;;   (with-slots (store offset) l
+;;     (setf (fill-pointer store) 0
+;;           offset 0)))
 
 (defmethod clear ((l array-list-x))
-  (with-slots (store offset) l
-    (setf (fill-pointer store) 0
-          offset 0)))
-
-;; (defmethod iterator ((l array-list-x))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'mutable-collection-iterator
-;;                    :modification-count #'(lambda () modification-count)
-;;                    :cursor (make-random-access-list-cursor l))))
-
-;; (defmethod list-iterator ((l array-list-x) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
+  (call-next-method)
+  (with-slots (offset) l
+    (setf offset 0)))
 
 (defmethod contains ((l array-list-x) obj &key (test #'eql))
   (with-slots (store offset) l
     (find obj store :start offset :test test)))
 
-;; (defmethod add ((l array-list-x) &rest objs)
-;;   (with-slots (store) l
-;;     (dolist (obj objs)
-;;       (vector-push-extend obj store))))
+(defmethod shift-up ((l array-list-x) (low integer) &optional (high (size l)))
+  (with-slots (offset) l
+    (call-next-method l (+ low offset) (+ high offset))))
+    
+(defmethod shift-down ((l array-list-x) (low integer) &optional (high (size l)))
+  (with-slots (offset) l
+    (call-next-method l (+ low offset) (+ high offset))))
 
 (defmethod insert ((l array-list-x) (i integer) obj)
   (with-slots (store offset) l
-    (let ((j (+ i offset)))
-      (cond ((or (zerop offset)
-                 (> i (floor (size l) 2)))
-             (vector-push-extend (fill-elt l) store)
-;             (setf (subseq store (1+ j)) (subseq store j)))
-             (shift-up l (+ i offset)))
-            ((zerop i) (decf offset))
-            (t (decf offset)
-               (shift-down l offset (+ i offset))))
-;               (setf (subseq store offset) (subseq store (1+ offset) j))))
-;      (setf (aref store (+ i offset)) obj))))
-      (setf (nth l i) obj))))
+    (cond ((or (zerop offset)
+               (> i (floor (size l) 2)))
+           (vector-push-extend (fill-elt l) store)
+           (shift-up l i))
+          (t (unless (zerop i)
+               (shift-down l 0 i))
+             (decf offset)))
+    (setf (nth l i) obj)))
 
-;; (defmethod delete ((l array-list-x) (i integer))
-;;   (with-slots (store offset fill-elt) l
-;;     (let ((j (+ i offset)))
-;; ;      (prog1 (aref store j)
-;;       (prog1 (nth l i)
-;;         (cond ((= i 0) ; This doesn't make a bit of difference?!   Cuts 30%?!?!
-;; ;               (setf (aref store offset) fill-elt)
-;;                (setf (nth l 0) fill-elt) ; Allow GC
-;;                (incf offset))
-;; 	      ((<= i (floor (size l) 2)) ; j => 100X time ?!?
-;;                (setf (subseq store (1+ offset)) (subseq store offset j)
-;; ;                     (aref store offset) fill-elt)
-;;                      (nth l 0) fill-elt)
-;;                (incf offset))
-;;               (t (setf (subseq store j) (subseq store (1+ j)))
-;;                  (vector-pop store)))) )))
 (defmethod delete ((l array-list-x) (i integer))
   (with-slots (store offset fill-elt) l
-    (let ((j (+ i offset)))
-      (prog1 (nth l i)
-        (cond ((> i (floor (size l) 2))
-               (shift-down l (+ i offset))
-;               (setf (subseq store j) (subseq store (1+ j)))
-               (vector-pop store))
-              (t (unless (zerop i)
-                   (shift-up l offset (+ i offset)))
-;                   (setf (subseq store (1+ offset)) (subseq store offset j)))
-                 (setf (nth l 0) fill-elt) ; Allow GC
-                 (incf offset)))) )))
+    (prog1 (nth l i)
+      (cond ((> i (floor (size l) 2))
+             (shift-down l (1+ i))
+             (vector-pop store))
+            (t (unless (zerop i)
+                 (shift-up l 0 i))
+               (setf (nth l 0) fill-elt) ; Allow GC
+               (incf offset)))) ))
+
+;; (defmethod nth ((l array-list-x) (i integer))
+;;   (with-slots (store offset) l
+;;     (aref store (+ i offset))))
 
 (defmethod nth ((l array-list-x) (i integer))
-  (with-slots (store offset) l
-    (aref store (+ i offset))))
+  (with-slots (offset) l
+    (call-next-method l (+ i offset))))
+
+;; (defmethod (setf nth) (obj (l array-list-x) (i integer))
+;;   (with-slots (store offset) l
+;;     (setf (aref store (+ i offset)) obj)))
 
 (defmethod (setf nth) (obj (l array-list-x) (i integer))
-  (with-slots (store offset) l
-    (setf (aref store (+ i offset)) obj)))
+  (with-slots (offset) l
+    (call-next-method obj l (+ i offset))))
 
 (defmethod index ((l array-list-x) obj &key (test #'eql))
   (with-slots (store offset) l
@@ -2525,33 +2498,27 @@
 ;          do (setf (nth l i) obj))))  ; D'oh!!!!!!!!!!!!!!!!!!!!
           do (setf (gethash i store) obj))))
 
-(defmethod shift-up ((l hash-table-list) (low integer) &optional high)
+(defmethod shift-up ((l hash-table-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
-    (loop for i from high above low
-          do (setf (gethash i store) (gethash (1- i) store)))) )
+    (loop for i from (1- high) downto low
+          do (setf (gethash (1+ i) store) (gethash i store)))) )
 
-(defmethod shift-down ((l hash-table-list) (low integer) &optional high)
+(defmethod shift-down ((l hash-table-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
     (loop for i from low below high
-          do (setf (gethash i store) (gethash (1+ i) store)))) )
+          do (setf (gethash (1- i) store) (gethash i store)))) )
 
 (defmethod insert ((l hash-table-list) (i integer) obj)
   (with-slots (store) l
-;;     (loop for j from (size l) above i
-;; ;          do (setf (nth l j) (nth l (1- j))))
-;;           do (setf (gethash j store) (gethash (1- j) store)))
-    (shift-up l i (size l))
+    (shift-up l i)
     (setf (nth l i) obj)))
 ;    (setf (gethash i store) obj))) ; Faster???
                    
 (defmethod delete ((l hash-table-list) (i integer))
   (with-slots (store) l
-    (let ((last (1- (size l))))
-      (prog1 (nth l i)
-        ;; (loop for j from i below last
-        ;;       do (setf (gethash j store) (gethash (1+ j) store)))
-        (shift-down l i last)
-        (remhash last store)))) )
+    (prog1 (nth l i)
+      (shift-down l (1+ i))
+      (remhash (1- (size l)) store))))
 
 ;;;
 ;;;    This version takes 3X the time of the previous in the TEST-LIST-TIME test
@@ -2584,9 +2551,6 @@
 ;;;    HASH-TABLE-LIST-X
 ;;;    - Similar to ARRAY-LIST-X w/ OFFSET
 ;;;
-;; (defclass hash-table-list-x (mutable-list)
-;;   ((store :initform (make-hash-table))
-;;    (offset :initform 0 :type integer)))
 (defclass hash-table-list-x (hash-table-list)
   ((offset :initform 0 :type integer)))
 
@@ -2596,103 +2560,64 @@
 (defmethod make-empty-list ((l hash-table-list-x))
   (make-hash-table-list-x :type (type l) :fill-elt (fill-elt l)))
 
-;; (defmethod size ((l hash-table-list-x))
-;;   (with-slots (store) l
-;;     (hash-table-count store)))
-
-;; (defmethod emptyp ((l hash-table-list-x))
-;;   (zerop (size l)))
+;; (defmethod clear ((l hash-table-list-x))
+;;   (with-slots (store offset) l
+;;     (clrhash store)
+;;     (setf offset 0)))
 
 (defmethod clear ((l hash-table-list-x))
-  (with-slots (store offset) l
-    (clrhash store)
+  (call-next-method)
+  (with-slots (offset) l
     (setf offset 0)))
-
-;; (defmethod iterator ((l hash-table-list-x))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'mutable-collection-iterator
-;;                    :modification-count #'(lambda () modification-count)
-;;                    :cursor (make-random-access-list-cursor l))))
-
-;; (defmethod list-iterator ((l hash-table-list-x) &optional (start 0))
-;;   (with-slots (modification-count) l
-;;     (make-instance 'random-access-list-list-iterator
-;;                    :list l
-;;                    :start start
-;;                    :modification-count #'(lambda () modification-count))))
-
-;; (defmethod contains ((l hash-table-list-x) obj &key (test #'eql))
-;;   (with-slots (store) l
-;;     (dotimes (i (size l) nil)
-;;       (let ((elt (nth l i)))
-;;         (when (funcall test obj elt)
-;;           (return elt)))) ))
-  ;; (with-slots (store offset) l
-  ;;   (loop for i from 0 below (size l)
-  ;;         for elt = (nth l i)
-  ;;         when (funcall test obj elt)
-  ;;         do (return elt)
-  ;;         finally (return nil))))
 
 (defmethod add ((l hash-table-list-x) &rest objs)
   (with-slots (store offset) l
     (loop for i from (+ (size l) offset)
           for obj in objs
-;          do (setf (nth l i) obj))))
-;          do (setf (gethash (+ i offset) store) obj))))
           do (setf (gethash i store) obj))))
+
+(defmethod shift-up ((l hash-table-list-x) (low integer) &optional (high (size l)))
+  (with-slots (offset) l
+    (call-next-method l (+ low offset) (+ high offset))))
+
+(defmethod shift-down ((l hash-table-list-x) (low integer) &optional (high (size l)))
+  (with-slots (offset) l
+    (call-next-method l (+ low offset) (+ high offset))))
 
 (defmethod insert ((l hash-table-list-x) (i integer) obj)
   (with-slots (store offset) l
-    (cond ((zerop i)
-           (decf offset))
-          ((> i (floor (size l) 2))
-;;            (loop for j from (+ (size l) offset) above (+ i offset)
-;; ;                 do (setf (nth l j) (nth l (1- j)))) )
-;;                  do (setf (gethash j store) (gethash (1- j) store))))
-           (shift-up l (+ i offset) (+ (size l) offset)))
-          (t (decf offset)
-;;              (loop for j from offset below (+ i offset)
-;; ;                   do (setf (nth l j) (nth l (1+ j)))) ))
-;;                    do (setf (gethash j store) (gethash (1+ j) store)))) )
-             (shift-down l offset (+ i offset))))
-;    (setf (gethash (+ i offset) store) obj)))
+    (cond ((> i (floor (size l) 2))
+           (shift-up l i))
+          (t (unless (zerop i)
+               (shift-down l 0 i))
+             (decf offset)))
     (setf (nth l i) obj)))
                    
 (defmethod delete ((l hash-table-list-x) (i integer))
   (with-slots (store offset) l
     (prog1 (nth l i)
-      (cond ((zerop i)
+      (cond ((> i (floor (size l) 2))
+             (shift-down l (1+ i))
+             (remhash (+ (1- (size l)) offset) store))
+            (t (unless (zerop i)
+                 (shift-up l 0 i))
              (remhash offset store)
-             (incf offset))
-            ((<= i (floor (size l) 2))
-;;              (loop for j from (+ i offset) above offset
-;;                    do (setf (gethash j store) (gethash (1- j) store)))
-;; ;                   do (setf (nth l j) (nth l (1- j))))
-             (shift-up l offset (+ i offset))
-             (remhash offset store)
-             (incf offset))
-            (t (let ((last (1- (size l))))
-;;                  (loop for j from (+ i offset) below (+ last offset)
-;;                        do (setf (gethash j store) (gethash (1+ j) store)))
-;; ;                     do (setf (nth l j) (nth l (1+ j))))
-                 (shift-down l (+ i offset) (+ last offset))
-                 (remhash (+ last offset) store)))) )))
+             (incf offset)))) ))
+;; (defmethod nth ((l hash-table-list-x) (i integer))
+;;   (with-slots (store offset) l
+;;     (gethash (+ i offset) store)))
 
 (defmethod nth ((l hash-table-list-x) (i integer))
-  (with-slots (store offset) l
-    (gethash (+ i offset) store)))
+  (with-slots (offset) l
+    (call-next-method l (+ i offset))))
+
+;; (defmethod (setf nth) (obj (l hash-table-list-x) (i integer))
+;;   (with-slots (store offset) l
+;;     (setf (gethash (+ i offset) store) obj)))
 
 (defmethod (setf nth) (obj (l hash-table-list-x) (i integer))
-  (with-slots (store offset) l
-    (setf (gethash (+ i offset) store) obj)))
-
-;; (defmethod index ((l hash-table-list-x) obj &key (test #'eql))
-;;   (with-slots (store offset) l
-;;     (dotimes (i (size l) nil)
-;; ;      (when (funcall test obj (gethash (+ i offset) store))
-;;       (when (funcall test obj (nth l i))
-;;         (return i)))) )
+  (with-slots (offset) l
+    (call-next-method obj l (+ i offset))))
 
 ;;;
 ;;;    HASH-TABLE-LIST-Z
