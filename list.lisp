@@ -201,10 +201,25 @@
   (declare (ignore l objs))
   (error "LIST does not implement ADD"))
 
+;; (defun extend-list (list i obj)
+;;   (apply #'add list (loop repeat (1+ (- i (size list)))
+;;                           for tail = (cl:list obj) then (cons (fill-elt list) tail)
+;;                           finally (return tail))))
+
+;; (defun extend-list (list i obj)
+;;   (apply #'add list (loop with count = (- i (size list))
+;;                           for i upto count
+;;                           when (< i count)
+;;                             collect (fill-elt list)
+;;                           else 
+;;                             collect obj)))
+
 (defun extend-list (list i obj)
-  (apply #'add list (loop repeat (1+ (- i (size list)))
-                          for tail = (cl:list obj) then (cons (fill-elt list) tail)
-                          finally (return tail))))
+  (apply #'add list (loop for i from (- i (size list)) downto 0
+                          when (> i 0)
+                            collect (fill-elt list)
+                          else
+                            collect obj)))
 
 ;;;
 ;;;    INSERT multiples like ADD?
@@ -473,10 +488,12 @@
 (defclass array-list (mutable-list)
   ((store)))
 
+(defconstant default-initial-size 20)
+
 (defmethod initialize-instance :after ((l array-list) &rest initargs)
   (declare (ignore initargs))
   (with-slots (store) l
-    (setf store (make-array 20 :adjustable t :fill-pointer 0 :element-type (type l)))) )
+    (setf store (make-array default-initial-size :adjustable t :fill-pointer 0 :element-type (type l)))) )
 
 (defun make-array-list (&key (type t) (fill-elt nil))
  (make-instance 'array-list :type type :fill-elt fill-elt))
@@ -596,9 +613,13 @@
 (defmethod make-empty-list ((l array-list-x))
   (make-array-list-x :type (type l) :fill-elt (fill-elt l)))
 
+;; (defmethod size ((l array-list-x))
+;;   (with-slots (store offset) l
+;;     (- (length store) offset)))
+
 (defmethod size ((l array-list-x))
-  (with-slots (store offset) l
-    (- (length store) offset)))
+  (with-slots (offset) l
+    (- (call-next-method) offset)))
 
 ;; (defmethod clear ((l array-list-x))
 ;;   (with-slots (store offset) l
@@ -622,23 +643,43 @@
   (with-slots (offset) l
     (call-next-method l (+ low offset) (+ high offset))))
 
+;; (defmethod insert ((l array-list-x) (i integer) obj)
+;;   (with-slots (store offset) l
+;;     (cond ((or (zerop offset)
+;;                (> i (floor (size l) 2)))
+;;            (vector-push-extend (fill-elt l) store)
+;;            (shift-up l i))
+;;           (t (unless (zerop i)
+;;                (shift-down l 0 i))
+;;              (decf offset)))
+;;     (setf (nth l i) obj)))
+
 (defmethod insert ((l array-list-x) (i integer) obj)
-  (with-slots (store offset) l
+  (with-slots (offset) l
     (cond ((or (zerop offset)
                (> i (floor (size l) 2)))
-           (vector-push-extend (fill-elt l) store)
-           (shift-up l i))
+           (call-next-method))
           (t (unless (zerop i)
                (shift-down l 0 i))
-             (decf offset)))
-    (setf (nth l i) obj)))
+             (decf offset)
+             (setf (nth l i) obj)))) )
+
+;; (defmethod delete ((l array-list-x) (i integer))
+;;   (with-slots (store offset fill-elt) l
+;;     (prog1 (nth l i)
+;;       (cond ((> i (floor (size l) 2))
+;;              (shift-down l (1+ i))
+;;              (vector-pop store))
+;;             (t (unless (zerop i)
+;;                  (shift-up l 0 i))
+;;                (setf (nth l 0) fill-elt) ; Allow GC
+;;                (incf offset)))) ))
 
 (defmethod delete ((l array-list-x) (i integer))
-  (with-slots (store offset fill-elt) l
+  (with-slots (offset fill-elt) l
     (prog1 (nth l i)
       (cond ((> i (floor (size l) 2))
-             (shift-down l (1+ i))
-             (vector-pop store))
+             (call-next-method))
             (t (unless (zerop i)
                  (shift-up l 0 i))
                (setf (nth l 0) fill-elt) ; Allow GC
@@ -2603,6 +2644,7 @@
                  (shift-up l 0 i))
              (remhash offset store)
              (incf offset)))) ))
+
 ;; (defmethod nth ((l hash-table-list-x) (i integer))
 ;;   (with-slots (store offset) l
 ;;     (gethash (+ i offset) store)))

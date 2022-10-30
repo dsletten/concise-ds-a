@@ -245,7 +245,7 @@
     (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
     (delete list low-index)
     (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
-    (assert (= (nth list low-index) (+ low-index 3)) () "~:R element should be ~D not ~D." (1+ low-index) (+ low-index 3) (nth list 0))
+    (assert (= (nth list low-index) (+ low-index 3)) () "~:R element should be ~D not ~D." (1+ low-index) (+ low-index 3) (nth list lowIndex))
     (delete list high-index)
     (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
     (assert (= (nth list high-index) (+ high-index 4)) () "~:R element should be ~D not ~D." (1+ high-index) (+ high-index 4) (nth list high-index)))
