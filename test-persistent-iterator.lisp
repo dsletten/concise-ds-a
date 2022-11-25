@@ -31,13 +31,11 @@
 (use-package :test)
 
 (defun test-persistent-iterator (collection)
-  (let ((iterator (iterator collection))
-        (size (size collection)))
-    (let ((iterator (loop repeat size
-                          for new-iterator = iterator then (next new-iterator)
-                          do (assert (not (done new-iterator)) () "Iterator should not yet be exhausted.")
-                          finally (return (next new-iterator)))) )
-      (assert (done iterator) () "Iterator should be exhausted.")))
+  (let ((iterator (loop repeat (size collection)
+                        for iterator = (iterator collection) then (next iterator)
+                        do (assert (not (done iterator)) () "Iterator should not yet be exhausted.")
+                        finally (return (next iterator)))) )
+    (assert (done iterator) () "Iterator should be exhausted."))
   t)
 
 (defun test-persistent-empty-iterator (collection-constructor)

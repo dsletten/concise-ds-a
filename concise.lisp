@@ -28,6 +28,9 @@
 (load "/home/slytobias/lisp/books/Concise/stack.lisp")
 (load "/home/slytobias/lisp/books/Concise/queue.lisp")
 (load "/home/slytobias/lisp/books/Concise/list.lisp")
+(load "/home/slytobias/lisp/books/Concise/list-stack.lisp")
+(load "/home/slytobias/lisp/books/Concise/list-queue.lisp")
+(load "/home/slytobias/lisp/books/Concise/deque.lisp")
 
 (in-package :containers)
 

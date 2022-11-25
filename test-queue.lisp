@@ -30,9 +30,9 @@
 
 (use-package :test)
 
-(defmethod fill ((queue queue) &optional (count 1000))
+(defmethod fill ((queue queue) &key (count 1000) (generator #'identity))
   (loop for i from 1 to count
-        do (enqueue queue i)
+        do (enqueue queue (funcall generator i))
         finally (return queue)))
 
 ;; (defmethod fill ((deque deque) &optional (count 1000))
@@ -114,17 +114,17 @@
           finally (return t))))
 
 (defun test-queue-clear (queue-constructor &optional (count 1000))
-  (let ((queue (fill (funcall queue-constructor) count)))
+  (let ((queue (fill (funcall queue-constructor) :count count)))
     (assert (not (emptyp queue)) () "Queue should have ~D elements." count)
     (clear queue)
     (assert (emptyp queue) () "Queue should be empty.")
     (assert-queue-size queue 0)
-    (fill queue count)
+    (fill queue :count count)
     (assert (not (emptyp queue)) () "Emptying queue should not break it.")
     t))
 
 (defun test-queue-dequeue (queue-constructor &optional (count 1000))
-  (let ((queue (fill (funcall queue-constructor) count)))
+  (let ((queue (fill (funcall queue-constructor) :count count)))
     (loop for i from 1 upto (size queue)
           for dequeued = (dequeue queue)
           do (assert (= i dequeued) () "Wrong value on queue: ~A should be: ~A~%" dequeued i))
@@ -132,7 +132,7 @@
   t)
 
 (defun test-queue-front (queue-constructor &optional (count 1000))
-  (let ((queue (fill (funcall queue-constructor) count)))
+  (let ((queue (fill (funcall queue-constructor) :count count)))
     (loop for i from 1 upto (size queue)
           for front = (front queue)
           do (assert (= i front) () "Wrong value on queue: ~A should be: ~A~%" front i)
@@ -141,7 +141,7 @@
   t)
 
 (defun test-deque-dequeue* (deque-constructor &optional (count 1000))
-  (let ((deque (fill (funcall deque-constructor) count)))
+  (let ((deque (fill (funcall deque-constructor) :count count)))
     (loop for i from count downto 1
           for dequeued = (dequeue* deque)
           do (assert (= i dequeued) () "Wrong value on queue: ~A should be: ~A~%" dequeued i))
@@ -149,7 +149,7 @@
   t)
 
 (defun test-deque-rear (deque-constructor &optional (count 1000))
-  (let ((deque (fill (funcall deque-constructor) count)))
+  (let ((deque (fill (funcall deque-constructor) :count count)))
     (loop for i from count downto 1
           for rear = (rear deque)
           do (assert (= i rear) () "Wrong value on queue: ~A should be: ~A~%" rear i)
@@ -161,7 +161,7 @@
   (let ((queue (funcall queue-constructor)))
     (time
      (dotimes (i 10 t)
-       (fill queue count)
+       (fill queue :count count)
        (loop until (emptyp queue) do (dequeue queue)))) ))
 
 (defun test-deque-time (deque-constructor &optional (count 100000))
@@ -174,22 +174,22 @@
 
 (defun test-queue-wave (queue-constructor)
   (let ((queue (funcall queue-constructor)))
-    (fill queue 5000)
+    (fill queue :count 5000)
     (assert-queue-size queue 5000)
     (dotimes (i 3000)
       (dequeue queue))
     (assert-queue-size queue 2000)
-    (fill queue 5000)
+    (fill queue :count 5000)
     (assert-queue-size queue 7000)
     (dotimes (i 3000)
       (dequeue queue))
     (assert-queue-size queue 4000)
-    (fill queue 5000)
+    (fill queue :count 5000)
     (assert-queue-size queue 9000)
     (dotimes (i 3000)
       (dequeue queue))
     (assert-queue-size queue 6000)
-    (fill queue 4000)
+    (fill queue :count 4000)
     (assert-queue-size queue 10000)
     (dotimes (i 10000)
       (dequeue queue))

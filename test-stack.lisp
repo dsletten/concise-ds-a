@@ -36,9 +36,9 @@
 ;;;
 ;;;    Not appropriate for PERSISTENT-STACK!
 ;;;    
-(defmethod fill ((stack stack) &optional (count 1000))
+(defmethod fill ((stack stack) &key (count 1000) (generator #'identity))
   (loop for i from 1 to count
-        do (push stack i)
+        do (push stack (funcall generator i))
         finally (return stack)))
 
 (defun test-stack-constructor (stack-constructor)
@@ -82,7 +82,7 @@
   (assert (= (size stack) n) () "Size of stack should be ~D." n))
 
 (defun test-stack-clear (stack-constructor &optional (count 1000))
-  (let ((stack (fill (funcall stack-constructor) count)))
+  (let ((stack (fill (funcall stack-constructor) :count count)))
     (assert (not (emptyp stack)) () "Stack should have ~D element~:P." count)
     (clear stack)
     (assert (emptyp stack) () "Stack should be empty.")
@@ -95,11 +95,11 @@
 ;;                    ((= n (pop stack)) (test-recursive stack (1- n)))
 ;;                    (t (error "Wrong value on stack: ~A should be: ~A~%" (top stack) n))))) ; Value already popped!!!
 ;;     (let ((stack (funcall stack-constructor)))
-;;       (fill stack count)
+;;       (fill stack :count count)
 ;;       (test-recursive stack (size stack)))) )
 
 (defun test-stack-pop (stack-constructor &optional (count 1000))
-  (let ((stack (fill (funcall stack-constructor) count)))
+  (let ((stack (fill (funcall stack-constructor) :count count)))
     (loop for i from (size stack) downto 1
           for popped = (pop stack)
           do (assert (= i popped) () "Wrong value on stack: ~A should be: ~A~%" popped i))
@@ -112,11 +112,11 @@
 ;;                    ((= n (peek stack)) (pop stack) (test-recursive stack (1- n)))
 ;;                    (t (error "Wrong value on stack: ~A should be: ~A~%" (peek stack) n)))))
 ;;     (let ((stack (funcall stack-constructor)))
-;;       (fill stack count)
+;;       (fill stack :count count)
 ;;       (test-recursive stack (size stack)))) )
 
 (defun test-stack-peek (stack-constructor &optional (count 1000))
-  (let ((stack (fill (funcall stack-constructor) count)))
+  (let ((stack (fill (funcall stack-constructor) :count count)))
     (loop for i from (size stack) downto 1
           for top = (peek stack)
           do (assert (= i top) () "Wrong value on stack: ~A should be: ~A~%" top i)
@@ -128,27 +128,27 @@
   (let ((stack (funcall stack-constructor)))
     (time
      (dotimes (i 10 t)
-       (fill stack count)
+       (fill stack :count count)
        (loop until (emptyp stack) do (pop stack)))) ))
 
 (defun test-stack-wave (stack-constructor)
   (let ((stack (funcall stack-constructor)))
-    (fill stack 5000)
+    (fill stack :count 5000)
     (assert-stack-size stack 5000)
     (dotimes (i 3000)
       (pop stack))
     (assert-stack-size stack 2000)
-    (fill stack 5000)
+    (fill stack :count 5000)
     (assert-stack-size stack 7000)
     (dotimes (i 3000)
       (pop stack))
     (assert-stack-size stack 4000)
-    (fill stack 5000)
+    (fill stack :count 5000)
     (assert-stack-size stack 9000)
     (dotimes (i 3000)
       (pop stack))
     (assert-stack-size stack 6000)
-    (fill stack 4000)
+    (fill stack :count 4000)
     (assert-stack-size stack 10000)
     (dotimes (i 10000)
       (pop stack))

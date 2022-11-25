@@ -129,6 +129,9 @@
   (declare (ignore initargs))           
   (assert (typep fill-elt (type l)) () "Incompatible FILL-ELT type: ~D should be: ~D" (type-of fill-elt) (type l)))
 
+;;;
+;;;    Ellipsis!!!
+;;;    
 (defmethod print-object ((l list) stream)
   (print-unreadable-object (l stream :type t)
     (format stream "(")
@@ -194,9 +197,10 @@
 (defgeneric add (list &rest objs)
   (:documentation "Add the objects to the end of the list."))
 (defmethod add :around ((l list) &rest objs)
-  (if (every #'(lambda (obj) (typep obj (type l))) objs)
-      (call-next-method)
-      (error "Type mismatch with OBJS")))
+  (cond ((null objs) l)
+        ((every #'(lambda (obj) (typep obj (type l))) objs)
+         (call-next-method))
+        (t (error "Type mismatch with OBJS"))))
 (defmethod add ((l list) &rest objs)
   (declare (ignore l objs))
   (error "LIST does not implement ADD"))
@@ -359,9 +363,22 @@
 
 (defgeneric reverse (list)
   (:documentation "Reverse the list. In place???"))
+;; (defmethod reverse ((l list))
+;;   (do ((reverse (make-empty-list l))
+;;        (iterator (iterator l)))
+;;       ((done iterator) reverse)
+;;     (insert reverse 0 (current iterator))
+;;     (next iterator)))
+;; (defmethod reverse ((l list))
+;;   (do ((iterator (iterator l))
+;;        (reversed '()))
+;;       ((done iterator) (apply #'add (make-empty-list l) reversed))
+;;     (cl:push (current iterator) reversed)
+;;     (next iterator)))
 (defmethod reverse ((l list))
-  (declare (ignore l))
-  (error "LIST does not implement REVERSE"))
+  (let ((reversed '()))
+    (each l #'(lambda (elt) (cl:push elt reversed)))
+    (apply #'add (make-empty-list l) reversed)))
 
 ;;;
 ;;;    MUTABLE-LIST
@@ -374,14 +391,12 @@
 (defmethod clear :after ((l mutable-list))
   (count-modification l))           
 
-(defmethod reverse :after ((l mutable-list))
-  (count-modification l))           
+;;;
+;;;    Only if reversed in place!!!
+;;;    
+;; (defmethod reverse :after ((l mutable-list))
+;;   (count-modification l))           
 
-(defmethod add :around ((l mutable-list) &rest objs)
-  (declare (ignore l))
-  (unless (null objs)
-    (call-next-method))
-  l)
 (defmethod add :after ((l mutable-list) &rest objs)
   (declare (ignore objs))
   (count-modification l))
@@ -540,7 +555,7 @@
 
 (defmethod add ((l array-list) &rest objs)
   (with-slots (store) l
-    (dolist (obj objs) ; Allocate new array?
+    (dolist (obj objs l) ; Allocate new array?
       (vector-push-extend obj store))))
 
 (defgeneric shift-up (list low &optional high)
@@ -590,6 +605,10 @@
 (defmethod index ((l array-list) obj &key (test #'eql))
   (with-slots (store) l
     (position obj store :test test)))
+
+(defmethod reverse ((l array-list))
+  (with-slots (store) l
+    (apply #'add (make-empty-list l) (coerce (cl:reverse store) 'cl:list))))
 
 ;;;
 ;;;    ARRAY-LIST-X
@@ -708,6 +727,10 @@
           pos
           (- pos offset)))) )
 
+(defmethod reverse ((l array-list-x))
+  (with-slots (store offset) l
+    (apply #'add (make-empty-list l) (coerce (cl:reverse (subseq store offset)) 'cl:list))))
+
 ;;;
 ;;;    SINGLY-LINKED-LIST
 ;;;    
@@ -771,11 +794,12 @@
 ;;;    
 (defmethod add ((l singly-linked-list) &rest objs)
   (with-slots (store count) l
-    (loop for i from 0
-          for elt in objs
-          collect elt into elts
-          finally (progn (setf store (nconc store elts))
-                         (incf count i)))) )
+    (prog1 l
+      (loop for i from 0
+            for elt in objs
+            collect elt into elts
+            finally (progn (setf store (nconc store elts))
+                           (incf count i)))) ))
 
 ;;;
 ;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
@@ -971,11 +995,12 @@
                      for obj in objs
                      do (setf rear (setf (rest rear) (cl:list obj))) ; Enqueue
                      finally (incf count i))))
-      (cond ((emptyp l)
-             (setf rear (setf front (cl:list (first objs))))
-             (incf count)
-             (add-nodes (rest objs)))
-            (t (add-nodes objs)))) ))
+      (prog1 l
+        (cond ((emptyp l)
+               (setf rear (setf front (cl:list (first objs))))
+               (incf count)
+               (add-nodes (rest objs)))
+              (t (add-nodes objs)))) )))
 
 ;;;
 ;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
@@ -1956,10 +1981,11 @@
                      do (dlink dcons (make-instance 'dcons :content elt))
                      finally (progn (dlink dcons store)
                                     (incf count i)))) )
-      (let ((dcons (make-instance 'dcons :content (first objs))))
-        (cond ((emptyp l) (setf store dcons))
-              (t (dlink (previous store) dcons)))
-        (add-nodes dcons (rest objs)))) ))
+      (prog1 l
+        (let ((dcons (make-instance 'dcons :content (first objs))))
+          (cond ((emptyp l) (setf store dcons))
+                (t (dlink (previous store) dcons)))
+          (add-nodes dcons (rest objs)))) )))
 
 ;;;
 ;;;    This is substantially the same as INSERT-BEFORE, but they must remain distinct to prevent
@@ -2155,14 +2181,17 @@
       (:forward (dlink node1 node2))
       (:backward (dlink node2 node1)))) )
   
+(defmethod reverse :after ((l doubly-linked-list-ratchet))
+  (count-modification l))           
 (defmethod reverse ((l doubly-linked-list-ratchet))
-  (with-slots (store cursor direction) l
-    (ecase direction
-      (:forward (setf direction :backward))
-      (:backward (setf direction :forward)))
-    (unless (emptyp l)
-      (setf store (ratchet-forward l store)))
-    (setf cursor (setup-cursor l))))
+  (prog1 l
+    (with-slots (store cursor direction) l
+      (ecase direction
+        (:forward (setf direction :backward))
+        (:backward (setf direction :forward)))
+      (unless (emptyp l)
+        (setf store (ratchet-forward l store)))
+      (setf cursor (setup-cursor l)))))
 
 (defmethod clear ((l doubly-linked-list-ratchet))
   (unless (emptyp l)
@@ -2187,10 +2216,11 @@
                      do (add-node-to-end dcons (make-instance 'dcons :content elt))
                      finally (progn (ratchet-dlink l dcons store)
                                     (incf count i)))) )
-      (let ((dcons (make-instance 'dcons :content (first objs))))
-        (cond ((emptyp l) (setf store dcons))
-              (t (add-node-to-end (ratchet-backward l store) dcons)))
-        (add-nodes dcons (rest objs)))) ))
+      (prog1 l
+        (let ((dcons (make-instance 'dcons :content (first objs))))
+          (cond ((emptyp l) (setf store dcons))
+                (t (add-node-to-end (ratchet-backward l store) dcons)))
+          (add-nodes dcons (rest objs)))) )))
 
 (defmethod insert ((l doubly-linked-list-ratchet) (i integer) obj)
   (with-slots (store direction count) l
@@ -2389,10 +2419,11 @@
                      for elt in elts
                      do (link-dnodes l dnode (make-node elt))
                      finally (link-dnodes l dnode head))))
-      (let ((dnode (make-node (first objs))))
-        (cond ((emptyp l) (setf head dnode))
-              (t (link-dnodes l (previous-dnode l head) dnode)))
-        (add-nodes dnode (rest objs)))) ))
+      (prog1 l
+        (let ((dnode (make-node (first objs))))
+          (cond ((emptyp l) (setf head dnode))
+                (t (link-dnodes l (previous-dnode l head) dnode)))
+          (add-nodes dnode (rest objs)))) )))
 
 ;; (defmethod add :after ((l doubly-linked-list-hash-table) &rest objs)
 ;;   (declare (ignore objs))
@@ -2467,11 +2498,14 @@
         for dnode = (nth-dll-node l start) then (next-dnode l dnode)
         collect (content dnode)))
 
+(defmethod reverse :after ((l doubly-linked-list-hash-table))
+  (count-modification l))           
 (defmethod reverse ((l doubly-linked-list-hash-table))
-  (with-slots (head forward backward cursor) l
-    (setf head (previous-dnode l head))
-    (rotatef forward backward)
-    (reset cursor)))
+  (prog1 l
+    (with-slots (head forward backward cursor) l
+      (setf head (previous-dnode l head))
+      (rotatef forward backward)
+      (reset cursor))))
 
 ;;;
 ;;;    HASH-TABLE-LIST
@@ -2534,10 +2568,11 @@
 
 (defmethod add ((l hash-table-list) &rest objs)
   (with-slots (store) l
-    (loop for i from (size l)
-          for obj in objs
+    (prog1 l
+      (loop for i from (size l)
+            for obj in objs
 ;          do (setf (nth l i) obj))))  ; D'oh!!!!!!!!!!!!!!!!!!!!
-          do (setf (gethash i store) obj))))
+            do (setf (gethash i store) obj)))) )
 
 (defmethod shift-up ((l hash-table-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
@@ -2613,9 +2648,10 @@
 
 (defmethod add ((l hash-table-list-x) &rest objs)
   (with-slots (store offset) l
-    (loop for i from (+ (size l) offset)
-          for obj in objs
-          do (setf (gethash i store) obj))))
+    (prog1 l
+      (loop for i from (+ (size l) offset)
+            for obj in objs
+            do (setf (gethash i store) obj)))) )
 
 (defmethod shift-up ((l hash-table-list-x) (low integer) &optional (high (size l)))
   (with-slots (offset) l
@@ -2756,9 +2792,10 @@
     (cl:push i (gethash obj erots))))
 
 (defmethod add ((l hash-table-list-z) &rest objs)
-  (loop for i from (size l)
-        for obj in objs
-        do (symmetric-add l i obj)))
+  (prog1 l
+    (loop for i from (size l)
+          for obj in objs
+          do (symmetric-add l i obj))))
 
 (defun clear-erots-index (erots obj i)
   (let* ((indexes (gethash obj erots))
@@ -2929,13 +2966,11 @@
              (cond ((null front) (setf rear (setf front copy)))
                    (t (setf rear (setf (rest rear) copy)))) ))))
   (defmethod add ((l persistent-list) &rest objs) ; Slow!
-    (if (null objs)
-        l
-        (with-slots (type fill-elt store count) l
-          (loop for elt in objs
-                for i from 1
-                collect elt into elts
-                finally (return (initialize-list type fill-elt (append store elts) (+ i count)))) )))
+    (with-slots (type fill-elt store count) l
+      (loop for elt in objs
+            for i from 1
+            collect elt into elts
+            finally (return (initialize-list type fill-elt (append store elts) (+ i count)))) ))
   (defmethod insert ((l persistent-list) (i integer) obj)
     (with-slots (type fill-elt store count) l
       (initialize-list type fill-elt (adjust-node store i #'(lambda (node) (cons obj node))) (1+ count))))

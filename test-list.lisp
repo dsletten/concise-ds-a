@@ -30,9 +30,9 @@
 
 (use-package :test)
 
-(defmethod fill ((list mutable-list) &optional (count 1000))
-  (apply #'add list (loop for i from 1 to count collect i))
-  list)
+;; (defmethod fill ((list mutable-list) &key (count 1000) (generator #'identity))
+(defmethod fill ((list list) &key (count 1000) (generator #'identity))
+  (apply #'add list (loop for i from 1 to count collect (funcall generator i))))
 
 (defun test-list-constructor (list-constructor)
   (let ((list (funcall list-constructor)))
@@ -62,9 +62,9 @@
     (loop for i from 1 to count
           do (add list i)
              (assert-list-size list i))
-    (loop for i from count downto 1 ; Same as TEST-LIST-DELETE
-          do (assert-list-size list i)
-             (delete list 0))
+    (loop for i from (1- count) downto 0 ; Same as TEST-LIST-DELETE
+          do (delete list 0)
+             (assert-list-size list i))
     (assert (zerop (size list)) () "Size of empty list should be zero."))
   t)
 
@@ -72,7 +72,7 @@
   (assert (= (size list) n) () "Size of list should be ~D." n))
 
 (defun test-list-clear (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (assert (not (emptyp list)) () "List should have ~D elements." count)
     (clear list)
     (assert (emptyp list) () "List should be empty.")
@@ -80,7 +80,7 @@
   t)
 
 (defun test-list-contains (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 1 to count
           do (assert (= (contains list i) i) () "The list should contain the value ~D" i)))
   t)
@@ -99,23 +99,26 @@
   t)
 
 (defun test-list-contains-arithmetic (list-constructor)
-  (let ((list (fill (funcall list-constructor) 20)))
+  (let ((list (fill (funcall list-constructor) :count 20)))
     (assert (eql (contains list 3) 3) () "Literal 3 should be present in list.")
     (assert (eql (contains list 3d0 :test #'=) 3) () "Integer equal to 3.0 should be present in list.")
     (assert (eql (contains list 3 :test #'(lambda (item elt) (= elt (1+ item)))) 4) ()
             "List contains the element one larger than 3.")
     (assert (eql (contains list 2 :test #'(lambda (item elt) (> elt (* 2 item)))) 5) ()
-            "First element in list larger than 2 doubled is 5."))
+            "First element in list larger than 2 doubled is 5.")
+    (assert (eql (contains list 3 :test #'(lambda (item elt) (zerop (mod elt item)))) 3) ()
+            "First multiple of 3 should be present in list."))
   t)
     
 (defun test-list-equals (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count))
-        (array-list (fill (make-instance 'array-list) count))
-        (doubly-linked-list (fill (make-instance 'doubly-linked-list) count)))
+  (let ((list (fill (funcall list-constructor) :count count))
+        (array-list (fill (make-instance 'array-list) :count count))
+        (doubly-linked-list (fill (make-instance 'doubly-linked-list) :count count)))
+    (assert (equals list list) () "Equality should be reflexive.")
     (assert (equals list array-list) () "Lists with same content should be equal.")
-    (assert (equals array-list list) () "Equality should be commutative.")
+    (assert (equals array-list list) () "Equality should be symmetric.")
     (assert (equals list doubly-linked-list) () "Lists with same content should be equal.")
-    (assert (equals doubly-linked-list list) () "Equality should be commutative."))
+    (assert (equals doubly-linked-list list) () "Equality should be symmetric."))
   t)
 
 (defun test-list-equals-predicate (list-constructor)
@@ -126,6 +129,27 @@
     (assert (not (equals list doubly-linked-list)) () "Default test EQL should fail.")
     (assert (equals list array-list :test #'char-equal) () "Specific test should succeed.")
     (assert (equals list doubly-linked-list :test #'char-equal) () "Specific test should succeed."))
+  t)
+
+(defun test-list-equals-transform (list-constructor)
+  (let ((word-list-1 (apply #'add (funcall list-constructor) '("Is" "this" "not" "pung?")))
+        (word-list-2 (apply #'add (funcall list-constructor) '("gg" "mcmc" "uuu" "ixncm")))
+        (word-list-3 (apply #'add (funcall list-constructor) '("Is" "this" "no" "pung?")))
+        (number-list (apply #'add (funcall list-constructor) '(2 4 3 5))))
+    (labels ((compare (o1 o2)
+               (= (value o1) (value o2)))
+             (value (o)
+               (etypecase o
+                 (string (length o))
+                 (number o))))
+      (assert (not (equals word-list-1 word-list-2)) () "Default test EQL should fail.")
+      (assert (equals word-list-1 word-list-2 :test #'compare) () "Specific test should succeed.")
+      (assert (equals word-list-2 word-list-1 :test #'compare) () "Equality should be symmetric.")
+      (assert (equals word-list-1 number-list :test #'compare) () "Specific test should succeed.")
+      (assert (equals word-list-2 number-list :test #'compare) () "Specific test should succeed.")
+      (assert (equals number-list word-list-1 :test #'compare) () "Equality should be symmetric.")
+      (assert (not (equals word-list-1 word-list-3 :test #'compare)) () "Unequal lists are not equal.")
+      (assert (not (equals number-list word-list-3 :test #'compare)) () "Unequal lists are not equal.")))
   t)
 
 (defun test-list-each (list-constructor)
@@ -149,13 +173,15 @@
 (defun test-list-insert (list-constructor &key (fill-elt nil))
   (let ((list (funcall list-constructor :fill-elt fill-elt))
         (count 6)
-        (elt :bar))
-    (insert list (1- count) :foo)
+        (elt1 :foo)
+        (elt2 :bar))
+    (insert list (1- count) elt1)
     (assert (= (size list) count) () "Insert should extend list.")
+    (assert (eq (nth list (1- count)) elt1) () "Inserted element should be ~S." elt1)
     (assert (eq (nth list 0) fill-elt) () "Empty elements should be filled with ~S." fill-elt)
-    (insert list 0 elt)
+    (insert list 0 elt2)
     (assert (= (size list) (1+ count)) () "Insert should increase length.")
-    (assert (eq (nth list 0) elt) () "Inserted element should be ~S." elt))
+    (assert (eq (nth list 0) elt2) () "Inserted element should be ~S." elt2))
   t)
 
 (defun test-list-insert-fill-zero (list-constructor)
@@ -193,17 +219,17 @@
   (let ((low-index 1)
         (high-index (* 3/4 count))
         (elt 88))
-    (let ((list (fill (funcall list-constructor) count)))
+    (let ((list (fill (funcall list-constructor) :count count)))
       (delete list 0)
       (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
       (insert list 0 elt)
       (assert (= (nth list 0) elt) () "First element should be ~D not ~D." elt (nth list 0)))
-    (let ((list (fill (funcall list-constructor) count)))
+    (let ((list (fill (funcall list-constructor) :count count)))
       (delete list 0)
       (insert list low-index elt)
       (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
       (assert (= (nth list low-index) elt) () "~:R element should be ~D not ~D." (1+ low-index) elt (nth list low-index)))
-    (let ((list (fill (funcall list-constructor) count)))
+    (let ((list (fill (funcall list-constructor) :count count)))
       (delete list 0)
       (insert list high-index elt)
       (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
@@ -211,23 +237,22 @@
   t)
 
 (defun test-list-delete (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
-    (loop for i from count downto 1
+  (let ((list (fill (funcall list-constructor) :count count)))
+    (loop for i from (1- count) downto 0
           for j from 1
-          for size = (size list)
           for doomed = (delete list 0)
-          do (assert (= size i) () "List size should reflect deletions")
+          do (assert (= (size list) i) () "List size should reflect deletions")
              (assert (= doomed j) () "Incorrect deleted value returned: ~D rather than ~D" doomed j))
     (assert (emptyp list) () "Empty list should be empty."))
-  (let ((list (fill (funcall list-constructor) count)))
-    (loop for i from count downto 1
-          for doomed = (delete list (1- i))
-          do (assert (= doomed i) () "Incorrect deleted value returned: ~D rather than ~D" doomed i))
+  (let ((list (fill (funcall list-constructor) :count count)))
+    (loop for i from (1- count) downto 0
+          for doomed = (delete list i)
+          do (assert (= doomed (1+ i)) () "Incorrect deleted value returned: ~D rather than ~D" doomed (1+ i)))
     (assert (emptyp list) () "Empty list should be empty."))
   t)
 
 (defun test-list-delete-negative-index (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from count downto 1
           do (assert (= (delete list -1) i) () "Deleted element should be last in list"))
     (assert (emptyp list) () "Empty list should be empty."))
@@ -240,25 +265,25 @@
 (defun test-list-delete-offset (list-constructor &optional (count 1000))
   (let ((low-index 1)
         (high-index (* 3/4 count))
-        (list (fill (funcall list-constructor) count)))
+        (list (fill (funcall list-constructor) :count count)))
     (delete list 0)
     (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
     (delete list low-index)
     (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
-    (assert (= (nth list low-index) (+ low-index 3)) () "~:R element should be ~D not ~D." (1+ low-index) (+ low-index 3) (nth list lowIndex))
+    (assert (= (nth list low-index) (+ low-index 3)) () "~:R element should be ~D not ~D." (1+ low-index) (+ low-index 3) (nth list low-index))
     (delete list high-index)
     (assert (= (nth list 0) 2) () "First element should be ~D not ~D." 2 (nth list 0))
     (assert (= (nth list high-index) (+ high-index 4)) () "~:R element should be ~D not ~D." (1+ high-index) (+ high-index 4) (nth list high-index)))
   t)
 
 (defun test-list-nth (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 0 below count
           do (assert (= (nth list i) (1+ i)) () "~:R element should be: ~A" i (1+ i))))
   t)
 
 (defun test-list-nth-negative-index (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from -1 downto (- count)
           do (assert (= (nth list i) (+ count i 1)) () "~:R element should be: ~D not ~D" i (+ count i 1) (nth list i))))
   t)
@@ -274,7 +299,7 @@
   t)
 
 (defun test-list-setf-nth-negative-index (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from -1 downto (- count)
           do (setf (nth list i) i))
     (loop for i from 0 below count
@@ -292,7 +317,7 @@
   t)
 
 (defun test-list-index (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
+  (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 1 to count
           do (assert (= (index list i) (1- i)) () "The value ~D should be located at index ~D" (1- i) i)))
   t)
@@ -308,14 +333,19 @@
   t)
 
 (defun test-list-index-arithmetic (list-constructor)
-  (let ((list (fill (funcall list-constructor) 20)))
+  (let ((list (fill (funcall list-constructor) :count 20)))
     (assert (= (index list 3) 2) () "Literal 3 should be at index 2.")
+    (assert (= (index list 3d0 :test #'=) 2) () "Integer equal to 3.0 should be present in list at index 2.")
+    (assert (= (index list 3 :test #'(lambda (item elt) (= elt (1+ item)))) 3) ()
+            "List contains the element one larger than 3 at index 3.")
+    (assert (= (index list 2 :test #'(lambda (item elt) (> elt (* 2 item)))) 4) ()
+            "First element in list larger than 2 doubled is 5 at index 4.")
     (assert (= (index list 3 :test #'(lambda (item elt) (zerop (mod elt item)))) 2) ()
             "First multiple of 3 should be at index 2."))
   t)
     
 (defun test-list-slice (list-constructor &optional (count 1000))
-  (let* ((list (fill (funcall list-constructor) count))
+  (let* ((list (fill (funcall list-constructor) :count count))
          (j (floor count 10))
          (n (floor count 2))
          (slice (slice list j n)))
@@ -325,7 +355,7 @@
   t)
 
 (defun test-list-slice-negative-index (list-constructor &optional (count 1000))
-  (let* ((list (fill (funcall list-constructor) count))
+  (let* ((list (fill (funcall list-constructor) :count count))
          (j (floor count 2))
          (n (floor count 2))
          (slice (slice list (- j))))
@@ -335,13 +365,28 @@
   t)
 
 (defun test-list-slice-corner-cases (list-constructor &optional (count 1000))
-  (let ((list (fill (funcall list-constructor) count)))
-    (let ((slice (slice list (size list) 10)))
+  (let ((list (fill (funcall list-constructor) :count count))
+        (n 10))
+    (let ((slice (slice list (size list) n)))
       (assert (emptyp slice) () "Slice at end of list should be empty"))
-    (let ((slice (slice list -10 10)))
-      (assert (= (size slice) 10) () "Slice of last ~D elements should have ~D elements: ~D" 10 10 (size slice)))
-    (let ((slice (slice list (- (1+ count)) 10)))
+    (let ((slice (slice list (- n) n)))
+      (assert (= n (size slice)) () "Slice of last ~D elements should have ~D elements: ~D" n n (size slice)))
+    (let ((slice (slice list (- (1+ count)) n)))
       (assert (emptyp slice) () "Slice with invalid negative index should be empty")))
+  t)
+
+;;;
+;;;    Tricky with in-place reverses: DOUBLY-LINKED-LIST-RATCHET, DOUBLY-LINKED-LIST-HASH-TABLE
+;;;    
+(defun test-list-reverse (list-constructor &optional (count 1000))
+  (let* ((original (fill (funcall list-constructor) :count count))
+         (backward (reverse original))
+         (expected (funcall list-constructor)))
+    (loop for i from count downto 1
+          do (add expected i))
+    (assert (equals expected backward) () "Reversed list should be: ~A instead of: ~A~%" (slice expected 0 20) (slice backward 0 20))
+    (let ((forward (reverse backward)))
+      (assert (equals original forward) () "Reversed reversed list should be: ~A instead of: ~A~%" (slice original 0 20) (slice forward 0 20))))
   t)
 
 ;;;
@@ -378,16 +423,6 @@
               (add list j))
             (clear list))))
   (let ((list (funcall list-constructor)))
-    (format t "Delete from front of list.~%")
-    (time (dotimes (i 10 t)
-            (fill list 10000) ; This is slow for SINGLY-LINKED-LIST!
-            (loop until (emptyp list) do (delete list 0)))) ) ; This is really slow for HASH-TABLE-LIST
-  (let ((list (funcall list-constructor)))
-    (format t "Delete from end of list.~%")
-    (time (dotimes (i 10 t)
-            (fill list 10000)
-            (loop until (emptyp list) do (delete list -1)))) ) ; Very fast for HASH-TABLE-LIST/ARRAY-LIST
-  (let ((list (funcall list-constructor)))
     (format t "Insert at random index.~%")
     (time (dotimes (i 10 t)
             (add list :x)
@@ -395,22 +430,33 @@
               (insert list (random (size list)) j))
             (clear list))))
   (let ((list (funcall list-constructor)))
+    (format t "Delete from front of list.~%")
+    (time (dotimes (i 10 t)
+            (fill list :count 10000) ; This is slow for SINGLY-LINKED-LIST!
+            (loop until (emptyp list) do (delete list 0)))) ) ; This is really slow for HASH-TABLE-LIST
+  (let ((list (funcall list-constructor)))
+    (format t "Delete from end of list.~%")
+    (time (dotimes (i 10 t)
+            (fill list :count 10000)
+            (loop until (emptyp list) do (delete list -1)))) ) ; Very fast for HASH-TABLE-LIST/ARRAY-LIST
+  (let ((list (funcall list-constructor)))
     (format t "Delete from random index.~%")
     (time (dotimes (i 10 t)
-            (fill list 10000)
+            (fill list :count 10000)
             (dotimes (j 10000)
               (delete list (random (size list)))) )))
-  (let ((list (fill (funcall list-constructor) 10000)))
+  (let ((list (fill (funcall list-constructor) :count 10000)))
     (format t "Sequential access of list elements.~%")
     (time (dotimes (i 10 t)
             (loop for j from 0 below (size list)
                   do (assert (= (nth list j) (1+ j)) () "~:R element should be: ~A" j (1+ j)))) ))
-  (let ((list (fill (funcall list-constructor) 10000)))
+  (let ((list (fill (funcall list-constructor) :count 10000)))
     (format t "Random access of list elements.~%")
     (time (dotimes (i 10 t)
             (loop repeat (size list)
                   for index = (random (size list)) ; RANDOM-STATE??
-                  do (assert (= (nth list index) (1+ index)) () "~:R element should be: ~A" index (1+ index)))) )))
+                  do (assert (= (nth list index) (1+ index)) () "~:R element should be: ~A" index (1+ index)))) ))
+  t)
 
 
 ;; (defun test-wave (list-constructor)
@@ -446,16 +492,22 @@
 
 (deftest list-test-suite (constructor)
   (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
-  (let ((tests '(test-list-constructor test-list-emptyp test-list-size 
-                 test-list-clear test-list-contains test-list-contains-predicate
-                 test-list-contains-arithmetic test-list-equals test-list-equals-predicate
-                 test-list-each test-list-add test-list-insert test-list-insert-fill-zero
+  (let ((tests '(test-list-constructor
+                 test-list-emptyp
+                 test-list-size 
+                 test-list-clear
+                 test-list-contains test-list-contains-predicate test-list-contains-arithmetic
+                 test-list-equals test-list-equals-predicate test-list-equals-transform
+                 test-list-each
+                 test-list-add
+                 test-list-insert test-list-insert-fill-zero
                  test-list-insert-negative-index test-list-insert-end test-list-insert-offset
                  test-list-delete test-list-delete-negative-index test-list-delete-offset
                  test-list-nth test-list-nth-negative-index
                  test-list-setf-nth test-list-setf-nth-negative-index test-list-setf-nth-out-of-bounds
                  test-list-index test-list-index-predicate test-list-index-arithmetic
                  test-list-slice test-list-slice-negative-index test-list-slice-corner-cases
+                 test-list-reverse
                  test-list-time)))
     (notany #'null (loop for test in tests
                          collect (progn
