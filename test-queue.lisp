@@ -123,37 +123,21 @@
     (assert (not (emptyp queue)) () "Emptying queue should not break it.")
     t))
 
-(defun test-queue-dequeue (queue-constructor &optional (count 1000))
+(defun test-queue-front-dequeue (queue-constructor &optional (count 1000))
   (let ((queue (fill (funcall queue-constructor) :count count)))
-    (loop for i from 1 upto (size queue)
-          for dequeued = (dequeue queue)
-          do (assert (= i dequeued) () "Wrong value on queue: ~A should be: ~A~%" dequeued i))
-    (assert (emptyp queue) () "Queue should be empty."))
-  t)
-
-(defun test-queue-front (queue-constructor &optional (count 1000))
-  (let ((queue (fill (funcall queue-constructor) :count count)))
-    (loop for i from 1 upto (size queue)
+    (loop repeat (size queue)
           for front = (front queue)
-          do (assert (= i front) () "Wrong value on queue: ~A should be: ~A~%" front i)
-             (dequeue queue))
+          for dequeued = (dequeue queue)
+          do (assert (= front dequeued) () "Wrong value dequeued: ~A should be: ~A~%" dequeued front))
     (assert (emptyp queue) () "Queue should be empty."))
   t)
 
-(defun test-deque-dequeue* (deque-constructor &optional (count 1000))
+(defun test-deque-rear-dequeue* (deque-constructor &optional (count 1000))
   (let ((deque (fill (funcall deque-constructor) :count count)))
-    (loop for i from count downto 1
-          for dequeued = (dequeue* deque)
-          do (assert (= i dequeued) () "Wrong value on queue: ~A should be: ~A~%" dequeued i))
-    (assert (emptyp deque) () "Deque should be empty."))
-  t)
-
-(defun test-deque-rear (deque-constructor &optional (count 1000))
-  (let ((deque (fill (funcall deque-constructor) :count count)))
-    (loop for i from count downto 1
+    (loop repeat (size deque)
           for rear = (rear deque)
-          do (assert (= i rear) () "Wrong value on queue: ~A should be: ~A~%" rear i)
-             (dequeue* deque))
+          for dequeued = (dequeue* deque)
+          do (assert (= rear dequeued) () "Wrong value dequeued from rear: ~A should be: ~A~%" dequeued rear))
     (assert (emptyp deque) () "Deque should be empty."))
   t)
 
@@ -196,116 +180,74 @@
     (assert (emptyp queue)))
   t)
 
+(deftest queue-test-suite (constructor)
+  (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
+  (let ((tests '(test-queue-constructor
+                 test-queue-emptyp
+                 test-queue-size
+                 test-queue-clear
+                 test-queue-front-dequeue
+                 test-queue-time
+                 test-queue-wave)))
+    (notany #'null (loop for test in tests
+                         collect (progn
+                                  (format t "~A~%" test)
+                                  (check (funcall test constructor)))) )))
+
 (deftest test-array-queue ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'array-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'array-queue)))
-   (test-queue-size #'(lambda () (make-instance 'array-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'array-queue)))
-   (test-queue-dequeue #'(lambda () (make-instance 'array-queue)))
-   (test-queue-front #'(lambda () (make-instance 'array-queue)))
-   (test-queue-time #'(lambda () (make-instance 'array-queue)))
-   (test-queue-wave #'(lambda () (make-instance 'array-queue)))) )
+   (queue-test-suite #'(lambda () (make-instance 'array-queue)))) )
 
 (deftest test-linked-queue ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-size #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-dequeue #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-front #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-time #'(lambda () (make-instance 'linked-queue)))
-   (test-queue-wave #'(lambda () (make-instance 'linked-queue)))) )
+   (queue-test-suite #'(lambda () (make-instance 'linked-queue)))) )
 
 (deftest test-linked-list-queue ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-size #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-dequeue #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-front #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-time #'(lambda () (make-instance 'linked-list-queue)))
-   (test-queue-wave #'(lambda () (make-instance 'linked-list-queue)))) )
+   (queue-test-suite #'(lambda () (make-instance 'linked-list-queue)))) )
 
 (deftest test-circular-queue ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-size #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-dequeue #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-front #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-time #'(lambda () (make-instance 'circular-queue)))
-   (test-queue-wave #'(lambda () (make-instance 'circular-queue)))) )
+   (queue-test-suite #'(lambda () (make-instance 'circular-queue)))) )
 
 (deftest test-recycling-queue ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'recycling-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'recycling-queue)))
-   (test-queue-size #'(lambda () (make-instance 'recycling-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'recycling-queue))) 
-   (test-queue-dequeue #'(lambda () (make-instance 'recycling-queue)))
-   (test-queue-front #'(lambda () (make-instance 'recycling-queue)))
-   (test-queue-time #'(lambda () (make-instance 'recycling-queue))) 
-   (test-queue-wave #'(lambda () (make-instance 'recycling-queue)))) )
+   (queue-test-suite #'(lambda () (make-instance 'recycling-queue)))) )
 
 (deftest test-ring-buffer ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'ring-buffer)))
-   (test-queue-emptyp #'(lambda () (make-instance 'ring-buffer)))
-   (test-queue-size #'(lambda () (make-instance 'ring-buffer)))
-   (test-queue-clear #'(lambda () (make-instance 'ring-buffer))) 
-   (test-queue-dequeue #'(lambda () (make-instance 'ring-buffer)))
-   (test-queue-front #'(lambda () (make-instance 'ring-buffer)))
-   (test-queue-time #'(lambda () (make-instance 'ring-buffer))) 
-   (test-queue-wave #'(lambda () (make-instance 'ring-buffer)))) )
+   (queue-test-suite #'(lambda () (make-instance 'ring-buffer)))) )
 
 (deftest test-hash-table-queue ()
   (check
-   (test-queue-constructor #'(lambda () (make-instance 'hash-table-queue)))
-   (test-queue-emptyp #'(lambda () (make-instance 'hash-table-queue)))
-   (test-queue-size #'(lambda () (make-instance 'hash-table-queue)))
-   (test-queue-clear #'(lambda () (make-instance 'hash-table-queue))) 
-   (test-queue-dequeue #'(lambda () (make-instance 'hash-table-queue)))
-   (test-queue-front #'(lambda () (make-instance 'hash-table-queue)))
-   (test-queue-time #'(lambda () (make-instance 'hash-table-queue))) 
-   (test-queue-wave #'(lambda () (make-instance 'hash-table-queue)))) )
+   (queue-test-suite #'(lambda () (make-instance 'hash-table-queue)))) )
+
+(deftest deque-test-suite (constructor)
+  (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
+  (let ((tests '(test-queue-constructor
+                 test-deque-constructor
+                 test-queue-emptyp
+                 test-deque-emptyp
+                 test-queue-size
+                 test-deque-size
+                 test-queue-clear
+                 test-queue-front-dequeue
+                 test-deque-rear-dequeue*
+                 test-queue-time
+                 test-deque-time
+                 test-queue-wave)))
+    (notany #'null (loop for test in tests
+                         collect (progn
+                                  (format t "~A~%" test)
+                                  (check (funcall test constructor)))) )))
 
 (deftest test-dll-deque ()
   (check
-   (test-queue-constructor #'make-dll-deque)
-   (test-deque-constructor #'make-dll-deque)
-   (test-queue-emptyp #'make-dll-deque)
-   (test-deque-emptyp #'make-dll-deque)
-   (test-queue-size #'make-dll-deque)
-   (test-deque-size #'make-dll-deque)
-   (test-queue-clear #'make-dll-deque)
-   (test-queue-dequeue #'make-dll-deque)
-   (test-queue-front #'make-dll-deque)
-   (test-deque-dequeue* #'make-dll-deque)
-   (test-deque-rear #'make-dll-deque)
-   (test-queue-time #'make-dll-deque)
-   (test-deque-time #'make-dll-deque)
-   (test-queue-wave #'make-dll-deque)))
+   (deque-test-suite #'make-dll-deque)))
 
 (deftest test-hash-table-deque ()
   (check
-   (test-queue-constructor #'make-hash-table-deque)
-   (test-deque-constructor #'make-hash-table-deque)
-   (test-queue-emptyp #'make-hash-table-deque)
-   (test-deque-emptyp #'make-hash-table-deque)
-   (test-queue-size #'make-hash-table-deque)
-   (test-deque-size #'make-hash-table-deque)
-   (test-queue-clear #'make-hash-table-deque)
-   (test-queue-dequeue #'make-hash-table-deque)
-   (test-queue-front #'make-hash-table-deque)
-   (test-deque-dequeue* #'make-hash-table-deque)
-   (test-deque-rear #'make-hash-table-deque)
-   (test-queue-time #'make-hash-table-deque)
-   (test-deque-time #'make-hash-table-deque)
-   (test-queue-wave #'make-hash-table-deque)))
+   (deque-test-suite #'make-hash-table-deque)))
 
 (deftest test-queue-all ()
   (check

@@ -126,39 +126,23 @@
     (assert (zerop (size (clear queue))) () "Size of queue should be 0."))
   t)
 
-(defun test-persistent-queue-dequeue (queue-constructor &optional (count 1000))
+(defun test-persistent-queue-front-dequeue (queue-constructor &optional (count 1000))
   (let ((queue (fill (funcall queue-constructor) :count count)))
-    (loop for i from 1 upto count
+    (loop repeat (size queue)
+          for front = (front queue)
           do (multiple-value-bind (q dequeued) (dequeue queue)
                (setf queue q)
-               (assert (= i dequeued) () "Wrong value on queue: ~A should be: ~A~%" dequeued i)))
+               (assert (= front dequeued) () "Wrong value dequeued: ~A should be: ~A~%" dequeued front)))
     (assert (emptyp queue) () "Queue should be empty."))
   t)
 
-(defun test-persistent-queue-front (queue-constructor &optional (count 1000))
-  (let ((queue (fill (funcall queue-constructor) :count count)))
-    (loop for i from 1 upto count
-          for front = (front queue)
-          do (setf queue (dequeue queue))
-             (assert (= i front) () "Wrong value on queue: ~A should be: ~A~%" front i))
-    (assert (emptyp queue) () "Queue should be empty."))
-  t)
-
-(defun test-persistent-deque-dequeue* (deque-constructor &optional (count 1000))
+(defun test-persistent-deque-rear-dequeue* (deque-constructor &optional (count 1000))
   (let ((deque (fill (funcall deque-constructor) :count count)))
-    (loop for i from count downto 1
+    (loop repeat (size deque)
+          for rear = (rear deque)
           do (multiple-value-bind (d dequeued) (dequeue* deque)
                (setf deque d)
-               (assert (= i dequeued) () "Wrong value on deque: ~A should be: ~A~%" dequeued i)))
-    (assert (emptyp deque) () "Deque should be empty."))
-  t)
-
-(defun test-persistent-deque-rear (deque-constructor &optional (count 1000))
-  (let ((deque (fill (funcall deque-constructor) :count count)))
-    (loop for i from count downto 1
-          for rear = (rear deque)
-          do (setf deque (dequeue* deque))
-             (assert (= i rear) () "Wrong value on deque: ~A should be: ~A~%" rear i))
+               (assert (= rear dequeued) () "Wrong value dequeued from rear: ~A should be: ~A~%" dequeued rear)))
     (assert (emptyp deque) () "Deque should be empty."))
   t)
 
@@ -187,8 +171,7 @@
                  test-persistent-queue-emptyp
                  test-persistent-queue-size
                  test-persistent-queue-clear
-                 test-persistent-queue-dequeue
-                 test-persistent-queue-front
+                 test-persistent-queue-front-dequeue
                  test-persistent-queue-time)))
     (notany #'null (loop for test in tests
                          collect (progn
@@ -204,10 +187,8 @@
                  test-persistent-queue-size
                  test-persistent-deque-size
                  test-persistent-queue-clear
-                 test-persistent-queue-dequeue
-                 test-persistent-queue-front
-                 test-persistent-deque-dequeue*
-                 test-persistent-deque-rear
+                 test-persistent-queue-front-dequeue
+                 test-persistent-deque-rear-dequeue*
                  test-persistent-queue-time
                  test-persistent-deque-time)))
     (notany #'null (loop for test in tests

@@ -85,21 +85,13 @@
     (assert (zerop (size (clear stack))) () "Size of stack should be 0."))
   t)
 
-(defun test-persistent-stack-pop (stack-constructor &optional (count 1000))
+(defun test-persistent-stack-peek-pop (stack-constructor &optional (count 1000))
   (let ((stack (fill (funcall stack-constructor) :count count)))
-    (loop for i from count downto 1
+    (loop repeat (size stack)
+          for top = (peek stack)
           do (multiple-value-bind (s popped) (pop stack)
                (setf stack s)
-               (assert (= i popped) () "Wrong value on stack: ~A should be: ~A~%" popped i)))
-    (assert (emptyp stack) () "Stack should be empty."))
-  t)
-
-(defun test-persistent-stack-peek (stack-constructor &optional (count 1000))
-  (let ((stack (fill (funcall stack-constructor) :count count)))
-    (loop for i from count downto 1
-          for top = (peek stack)
-          do (setf stack (pop stack))
-             (assert (= i top) () "Wrong value on stack: ~A should be: ~A~%" top i))
+               (assert (= top popped) () "Wrong value popped: ~A should be: ~A~%" popped top)))
     (assert (emptyp stack) () "Stack should be empty."))
   t)
 
@@ -115,8 +107,7 @@
                  test-persistent-stack-emptyp
                  test-persistent-stack-size
                  test-persistent-stack-clear
-                 test-persistent-stack-pop
-                 test-persistent-stack-peek
+                 test-persistent-stack-peek-pop
                  test-persistent-stack-time)))
     (notany #'null (loop for test in tests
                          collect (progn
