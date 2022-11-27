@@ -393,11 +393,9 @@
 (defun test-list-reverse (list-constructor &optional (count 1000))
   (let* ((original (fill (funcall list-constructor) :count count))
          (backward (reverse original))
-         (expected (funcall list-constructor)))
-    (loop for i from count downto 1
-          do (add expected i))
+         (expected (fill (funcall list-constructor) :count count :generator #'(lambda (i) (1+ (- count i)))) ))
     (assert (equals expected backward) () "Reversed list should be: ~A instead of: ~A~%" (slice expected 0 20) (slice backward 0 20))
-    (let ((forward (reverse backward)))
+    (let ((forward (reverse backward))) ; This has to come after first ASSERT with in-place reverses!
       (assert (equals original forward) () "Reversed reversed list should be: ~A instead of: ~A~%" (slice original 0 20) (slice forward 0 20))))
   t)
 
@@ -508,17 +506,34 @@
                  test-list-emptyp
                  test-list-size 
                  test-list-clear
-                 test-list-contains test-list-contains-predicate test-list-contains-arithmetic
-                 test-list-equals test-list-equals-predicate test-list-equals-transform
+                 test-list-contains
+                 test-list-contains-predicate
+                 test-list-contains-arithmetic
+                 test-list-equals
+                 test-list-equals-predicate
+                 test-list-equals-transform
                  test-list-each
                  test-list-add
-                 test-list-insert test-list-insert-fill-zero
-                 test-list-insert-negative-index test-list-insert-end test-list-insert-offset
-                 test-list-delete test-list-delete-negative-index test-list-delete-offset test-list-delete-random
-                 test-list-nth test-list-nth-negative-index
-                 test-list-setf-nth test-list-setf-nth-negative-index test-list-setf-nth-out-of-bounds
-                 test-list-index test-list-index-predicate test-list-index-arithmetic
-                 test-list-slice test-list-slice-negative-index test-list-slice-corner-cases
+                 test-list-insert
+                 test-list-insert-fill-zero
+                 test-list-insert-negative-index
+                 test-list-insert-end
+                 test-list-insert-offset
+                 test-list-delete
+                 test-list-delete-negative-index
+                 test-list-delete-offset
+                 test-list-delete-random
+                 test-list-nth
+                 test-list-nth-negative-index
+                 test-list-setf-nth
+                 test-list-setf-nth-negative-index
+                 test-list-setf-nth-out-of-bounds
+                 test-list-index
+                 test-list-index-predicate
+                 test-list-index-arithmetic
+                 test-list-slice
+                 test-list-slice-negative-index
+                 test-list-slice-corner-cases
                  test-list-reverse
                  test-list-time)))
     (notany #'null (loop for test in tests

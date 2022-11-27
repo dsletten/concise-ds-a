@@ -134,7 +134,6 @@
 (defmethod pop ((s linked-stack))
   (with-slots (top count) s
 ;    (cl:pop top)))
-;    (prog1 (first top)
     (prog1 (peek s)
       (setf top (rest top))
       (decf count))))
@@ -166,7 +165,6 @@
 
 (defmethod pop ((s hash-table-stack))
   (with-slots (store) s
-;    (prog1 (gethash (size s) store)
     (prog1 (peek s)
       (remhash (size s) store))))
 

@@ -75,8 +75,12 @@
 ;    (assert-stack-size stack 0)
     (loop for i from 1 to count
           do (push stack i)
-             (assert-stack-size stack i)
-          finally (return t))))
+             (assert-stack-size stack i))
+    (loop for i from (1- count) downto 0
+          do (pop stack)
+             (assert-stack-size stack i))
+    (assert (emptyp stack) () "Stack should be empty."))
+  t)
 
 (defun assert-stack-size (stack n)
   (assert (= (size stack) n) () "Size of stack should be ~D." n))
@@ -88,6 +92,23 @@
     (assert (emptyp stack) () "Stack should be empty.")
     (assert-stack-size stack 0)
     t))
+
+(defun test-stack-push (stack-constructor &optional (count 1000))
+  (let ((stack (funcall stack-constructor)))
+    (loop for i from 1 to count
+          do (push stack i)
+             (assert (= i (peek stack)) () "Wrong value pushed: ~A should be: ~A~%" (peek stack) i)))
+  t)
+
+(defun test-stack-push-wrong-type (stack-constructor)
+  (let ((stack (funcall stack-constructor :type 'integer)))
+    (handler-case (push stack 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't PUSH value of wrong type onto stack.~%"))))
+  t)
 
 (defun test-stack-peek-pop (stack-constructor &optional (count 1000))
   (let ((stack (fill (funcall stack-constructor) :count count)))
@@ -135,6 +156,8 @@
                  test-stack-emptyp
                  test-stack-size
                  test-stack-clear
+                 test-stack-push
+                 test-stack-push-wrong-type
                  test-stack-peek-pop
                  test-stack-time
                  test-stack-wave)))
@@ -145,19 +168,19 @@
 
 (deftest test-linked-stack ()
   (check
-   (stack-test-suite #'(lambda () (make-instance 'linked-stack)))) )
+   (stack-test-suite #'(lambda (&key (type t)) (make-instance 'linked-stack :type type)))) )
 
 (deftest test-linked-list-stack ()
   (check
-   (stack-test-suite #'(lambda () (make-instance 'linked-list-stack)))) )
+   (stack-test-suite #'(lambda (&key (type t)) (make-instance 'linked-list-stack :type type)))) )
 
 (deftest test-array-stack ()
   (check
-   (stack-test-suite #'(lambda () (make-instance 'array-stack)))) )
+   (stack-test-suite #'(lambda (&key (type t)) (make-instance 'array-stack :type type)))) )
 
 (deftest test-hash-table-stack ()
   (check
-   (stack-test-suite #'(lambda () (make-instance 'hash-table-stack)))) )
+   (stack-test-suite #'(lambda (&key (type t)) (make-instance 'hash-table-stack :type type)))) )
 
 (deftest test-stack-all ()
   (check

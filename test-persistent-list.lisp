@@ -263,6 +263,17 @@ t)
     (assert (emptyp list) () "Empty list should be empty."))
   t)
 
+(defun test-persistent-list-delete-random (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor) :count count)))
+    (loop repeat count
+          for i = (random (size list))
+          for expected = (nth list i)
+          do (multiple-value-bind (l doomed) (delete list i)
+               (setf list l)
+               (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected)))
+    (assert (emptyp list) () "Empty list should be empty."))
+  t)
+
 (defun test-persistent-list-nth (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 0 below count
@@ -362,6 +373,15 @@ t)
       (assert (emptyp slice) () "Slice with invalid negative index should be empty")))
   t)
 
+(defun test-persistent-list-reverse (list-constructor &optional (count 1000))
+  (let* ((original (fill (funcall list-constructor) :count count))
+         (expected (fill (funcall list-constructor) :count count :generator #'(lambda (i) (1+ (- count i)))) )
+         (backward (reverse original))
+         (forward (reverse backward)))
+    (assert (equals expected backward) () "Reversed list should be: ~A instead of: ~A~%" (slice expected 0 20) (slice backward 0 20))
+    (assert (equals original forward) () "Reversed reversed list should be: ~A instead of: ~A~%" (slice original 0 20) (slice forward 0 20)))
+  t)
+
 (defun test-persistent-list-time (list-constructor)
   (let ((list (funcall list-constructor)))
     (format t "Add to front of list.~%")
@@ -427,8 +447,11 @@ t)
                  test-persistent-list-insert-fill-zero
                  test-persistent-list-insert-negative-index
                  test-persistent-list-insert-end
+;;                 test-persistent-list-insert-offset
                  test-persistent-list-delete
                  test-persistent-list-delete-negative-index
+;;                 test-persistent-list-delete-offset
+                 test-persistent-list-delete-random
                  test-persistent-list-nth
                  test-persistent-list-nth-negative-index
                  test-persistent-list-setf-nth
@@ -440,6 +463,7 @@ t)
                  test-persistent-list-slice
                  test-persistent-list-slice-negative-index
                  test-persistent-list-slice-corner-cases
+                 test-persistent-list-reverse
                  test-persistent-list-time)))
     (notany #'null (loop for test in tests
                          collect (progn
