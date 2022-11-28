@@ -380,6 +380,10 @@
     (each l #'(lambda (elt) (cl:push elt reversed)))
     (apply #'add (make-empty-list l) reversed)))
 
+;; (defmethod fill ((list mutable-list) &key (count 1000) (generator #'identity))
+(defmethod fill ((list list) &key (count 1000) (generator #'identity))
+  (apply #'add list (loop for i from 1 to count collect (funcall generator i))))
+
 ;;;
 ;;;    MUTABLE-LIST
 ;;;    - SETF NTH can change length of list, but that will increment COUNT-MODIFICATION via EXTEND-LIST -> ADD

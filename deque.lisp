@@ -240,42 +240,46 @@
 ;;;    - Invariant: Tail of FRONT and head of REAR share same first enqueued elt.
 ;;;                 FRONT and REAR only null when deque is empty.
 ;;;
-(defclass persistent-deque (persistent-queue deque) ())
+(defclass persistent-deque (persistent-queue deque)
+  ()
+  (:documentation "A deque that defines non-destructive operations."))
 
-(defmethod make-empty-persistent-queue ((dq persistent-deque))
-  (make-instance 'persistent-deque :type (type dq)))
+(defclass persistent-linked-deque (persistent-deque persistent-linked-queue) ())
 
-(defmethod enqueue ((dq persistent-deque) obj)
+(defmethod make-empty-persistent-queue ((dq persistent-linked-deque))
+  (make-instance 'persistent-linked-deque :type (type dq)))
+
+(defmethod enqueue ((dq persistent-linked-deque) obj)
   (with-slots (front rear count) dq
     (if (emptyp dq)
-        (initialize-queue dq (cl:list obj) (cl:list obj) 1)
-        (initialize-queue dq front (cons obj rear) (1+ count)))) )
+        (initialize-linked-queue dq (cl:list obj) (cl:list obj) 1)
+        (initialize-linked-queue dq front (cons obj rear) (1+ count)))) )
 
-(defmethod enqueue* ((dq persistent-deque) obj)
+(defmethod enqueue* ((dq persistent-linked-deque) obj)
   (with-slots (front rear count) dq
     (if (emptyp dq)
-        (initialize-queue dq (cl:list obj) (cl:list obj) 1)
-        (initialize-queue dq (cons obj front) rear (1+ count)))) )
+        (initialize-linked-queue dq (cl:list obj) (cl:list obj) 1)
+        (initialize-linked-queue dq (cons obj front) rear (1+ count)))) )
 
-(defmethod dequeue ((dq persistent-deque))
+(defmethod dequeue ((dq persistent-linked-deque))
   (with-slots (front rear count) dq
     (let ((new-deque (if (null (rest front))
                          (if (null (rest rear))
                              (make-empty-persistent-queue dq)
-                             (initialize-queue dq (rest (cl:reverse rear)) (cl:list (rear dq)) (1- count)))
-                         (initialize-queue dq (rest front) rear (1- count)))) )
+                             (initialize-linked-queue dq (rest (cl:reverse rear)) (cl:list (rear dq)) (1- count)))
+                         (initialize-linked-queue dq (rest front) rear (1- count)))) )
       (values new-deque (front dq)))) )
 
-(defmethod dequeue* ((dq persistent-deque))
+(defmethod dequeue* ((dq persistent-linked-deque))
   (with-slots (front rear count) dq
     (let ((new-deque (if (null (rest rear))
                          (if (null (rest front))
                              (make-empty-persistent-queue dq)
-                             (initialize-queue dq (cl:list (front dq)) (rest (cl:reverse front)) (1- count)))
-                         (initialize-queue dq front (rest rear) (1- count)))) )
+                             (initialize-linked-queue dq (cl:list (front dq)) (rest (cl:reverse front)) (1- count)))
+                         (initialize-linked-queue dq front (rest rear) (1- count)))) )
       (values new-deque (rear dq)))) )
 
-(defmethod rear ((dq persistent-deque))
+(defmethod rear ((dq persistent-linked-deque))
   (with-slots (rear) dq
     (first rear)))
 

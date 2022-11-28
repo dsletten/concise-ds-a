@@ -72,6 +72,14 @@
   (error "STACK does not implement PEEK"))
 
 ;;;
+;;;    Not appropriate for PERSISTENT-STACK!
+;;;    
+(defmethod fill ((stack stack) &key (count 1000) (generator #'identity))
+  (loop for i from 1 to count
+        do (push stack (funcall generator i))
+        finally (return stack)))
+
+;;;
 ;;;    ARRAY-STACK
 ;;;    
 (defclass array-stack (stack)
@@ -183,33 +191,54 @@
 ;;;
 ;;;    (reduce #'(lambda (s elt) (push s elt)) '(2 4 6 8) :initial-value *ps*)
 (defclass persistent-stack (stack)
+  ()
+  (:documentation "A stack that defines non-destructive operations."))
+
+(defmethod fill ((stack persistent-stack) &key (count 1000) (generator #'identity))
+  (loop for i from 1 to count
+        for new-stack = (push stack (funcall generator i)) then (push new-stack (funcall generator i))   ; ??????? Scope problem without renaming?!??!
+        finally (return new-stack)))
+
+(defgeneric make-empty-persistent-stack (q)
+  (:documentation "Create an empty persistent stack of a given element type."))
+(defmethod make-empty-persistent-stack ((q persistent-stack))
+  (declare (ignore q))
+  (error "PERSISTENT-STACK does not implement MAKE-EMPTY-PERSISTENT-STACK"))
+
+;;;
+;;;    PERSISTENT-LINKED-STACK
+;;;
+(defclass persistent-linked-stack (persistent-stack)
   ((top :initform '())
    (count :initform 0 :type integer)))
 
-(defmethod size ((s persistent-stack))
+(defmethod make-empty-persistent-stack ((q persistent-linked-stack))
+  (make-instance 'persistent-linked-stack :type (type q)))
+
+(defmethod size ((s persistent-linked-stack))
   (with-slots (count) s
     count))
 
-(defmethod emptyp ((s persistent-stack))
+(defmethod emptyp ((s persistent-linked-stack))
   (with-slots (top) s
     (null top)))
 
-(defmethod clear ((s persistent-stack))
-  (make-instance 'persistent-stack :type (type s)))
+(defmethod clear ((s persistent-linked-stack))
+  (make-empty-persistent-stack s))
 
-(flet ((initialize-stack (type top count)
-         (let ((new-stack (make-instance 'persistent-stack :type type)))
+(flet ((initialize-stack (s top count)
+         (let ((new-stack (make-empty-persistent-stack s)))
            (with-slots ((new-top top) (new-count count)) new-stack
              (setf new-top top
                    new-count count))
            new-stack)))
-  (defmethod push ((s persistent-stack) obj)
-    (with-slots (type top count) s
-      (initialize-stack type (cons obj top) (1+ count))))
-  (defmethod pop ((s persistent-stack))
-    (with-slots (type top count) s
-      (values (initialize-stack type (rest top) (1- count)) (peek s)))) )
+  (defmethod push ((s persistent-linked-stack) obj)
+    (with-slots (top count) s
+      (initialize-stack s (cons obj top) (1+ count))))
+  (defmethod pop ((s persistent-linked-stack))
+    (with-slots (top count) s
+      (values (initialize-stack s (rest top) (1- count)) (peek s)))) )
 
-(defmethod peek ((s persistent-stack))
+(defmethod peek ((s persistent-linked-stack))
   (with-slots (top) s
     (first top)))

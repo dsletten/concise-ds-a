@@ -61,7 +61,7 @@
 ;;;    PERSISTENT-LIST-QUEUE
 ;;;
 (let ((empty (make-persistent-list)))
-  (defclass persistent-list-queue (queue)
+  (defclass persistent-list-queue (persistent-queue)
     ((list :initform empty))))
 
 (defmethod make-empty-persistent-queue ((q persistent-list-queue))
@@ -71,11 +71,8 @@
   (with-slots (list) q
     (size list)))
 
-;; (defmethod emptyp ((q persistent-list-queue))
-;;   (zerop (size q)))
-
 (defmethod clear ((q persistent-list-queue))
-  (make-instance 'persistent-list-queue :type (type q)))
+  (make-empty-persistent-queue q))
 
 (defun initialize-list-queue (q list)
   (let ((new-queue (make-empty-persistent-queue q)))

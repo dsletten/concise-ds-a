@@ -32,19 +32,6 @@
 
 (use-package :test)
 
-(defmethod fill ((stack persistent-stack) &key (count 1000) (generator #'identity))
-  (loop for i from 1 to count
-        for new-stack = (push stack (funcall generator i)) then (push new-stack (funcall generator i))   ; ??????? Scope problem without renaming?!??!
-        finally (return new-stack)))
-
-;;;
-;;;    Refactor? PERSISTENT-STACK/PERSISTENT-LIST-STACK with common superclass??
-;;;    
-(defmethod fill ((stack persistent-list-stack) &key (count 1000) (generator #'identity))
-  (loop for i from 1 to count
-        for new-stack = (push stack (funcall generator i)) then (push new-stack (funcall generator i))   ; ??????? Scope problem without renaming?!??!
-        finally (return new-stack)))
-
 (defun test-persistent-stack-constructor (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
@@ -140,9 +127,9 @@
                                   (format t "~A~%" test)
                                   (check (funcall test constructor)))) )))
 
-(deftest test-persistent-stack ()
+(deftest test-persistent-linked-stack ()
   (check
-   (persistent-stack-test-suite #'(lambda (&key (type t)) (make-instance 'persistent-stack :type type)))) )
+   (persistent-stack-test-suite #'(lambda (&key (type t)) (make-instance 'persistent-linked-stack :type type)))) )
 
 (deftest test-persistent-list-stack ()
   (check
@@ -150,6 +137,6 @@
 
 (deftest test-persistent-stack-all ()
   (check
-   (test-persistent-stack)
+   (test-persistent-linked-stack)
    (test-persistent-list-stack)))
    

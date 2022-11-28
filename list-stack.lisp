@@ -67,8 +67,11 @@
 ;;;    PERSISTENT-LIST-STACK
 ;;;
 (let ((empty (make-persistent-list))) ; FILL-ELT is never used!!
-  (defclass persistent-list-stack (stack)
+  (defclass persistent-list-stack (persistent-stack)
     ((list :initform empty))))
+
+(defmethod make-empty-persistent-stack ((q persistent-list-stack))
+  (make-instance 'persistent-list-stack :type (type q)))
 
 (defmethod size ((s persistent-list-stack))
   (with-slots (list) s
@@ -79,19 +82,19 @@
     (emptyp list)))
 
 (defmethod clear ((s persistent-list-stack))
-  (make-instance 'persistent-list-stack :type (type s)))
+  (make-empty-persistent-stack s))
 
-(flet ((initialize-stack (type list)
-         (let ((new-stack (make-instance 'persistent-list-stack :type type)))
+(flet ((initialize-stack (s list)
+         (let ((new-stack (make-empty-persistent-stack s)))
            (with-slots ((new-list list)) new-stack
              (setf new-list list))
            new-stack)))
   (defmethod push ((s persistent-list-stack) obj)
-    (with-slots (type list) s
-      (initialize-stack type (insert list 0 obj))))
+    (with-slots (list) s
+      (initialize-stack s (insert list 0 obj))))
   (defmethod pop ((s persistent-list-stack))
-    (with-slots (type list) s
-      (values (initialize-stack type (delete list 0)) (peek s)))) )
+    (with-slots (list) s
+      (values (initialize-stack s (delete list 0)) (peek s)))) )
 
 (defmethod peek ((s persistent-list-stack))
   (with-slots (list) s

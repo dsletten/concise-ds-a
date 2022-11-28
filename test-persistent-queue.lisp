@@ -30,29 +30,6 @@
 
 (use-package :test)
 
-(defmethod fill ((queue persistent-queue) &key (count 1000) (generator #'identity))
-  (labels ((fill-er-up (q i)
-             (if (> i count)
-                 q
-                 (fill-er-up (enqueue q (funcall generator i)) (1+ i)))) )
-    (fill-er-up queue 1)))
-
-;; (defmethod fill ((queue persistent-queue) &optional (count 1000))
-;;   (do* ((i 1 (1+ i))
-;;         (new-queue (enqueue queue i) (enqueue new-queue i)))
-;;        ((= i count) new-queue)))
-;;   ;; (loop for i from 1 to count
-;;   ;;       for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
-;;   ;;       finally (return new-queue)))
-
-;;;
-;;;    See test-persistent-stack.lisp
-;;;    
-(defmethod fill ((queue persistent-list-queue) &key (count 1000) (generator #'identity))
-  (loop for i from 1 to count
-        for new-queue = (enqueue queue (funcall generator i)) then (enqueue new-queue (funcall generator i))
-        finally (return new-queue)))
-
 (defun test-persistent-queue-constructor (queue-constructor)
   (let ((queue (funcall queue-constructor)))
     (assert (emptyp queue) () "New queue should be empty.")
@@ -196,17 +173,17 @@
                                   (format t "~A~%" test)
                                   (check (funcall test constructor)))) )))
 
-(deftest test-persistent-queue ()
+(deftest test-persistent-linked-queue ()
   (check
-   (persistent-queue-test-suite #'(lambda () (make-instance 'persistent-queue)))) )
+   (persistent-queue-test-suite #'(lambda () (make-instance 'persistent-linked-queue)))) )
 
 (deftest test-persistent-list-queue ()
   (check
    (persistent-queue-test-suite #'(lambda () (make-instance 'persistent-list-queue)))) )
 
-(deftest test-persistent-deque ()
+(deftest test-persistent-linked-deque ()
   (check
-   (persistent-deque-test-suite #'(lambda () (make-instance 'persistent-deque)))) )
+   (persistent-deque-test-suite #'(lambda () (make-instance 'persistent-linked-deque)))) )
 
 (deftest test-persistent-list-deque ()
   (check
@@ -214,9 +191,9 @@
 
 (deftest test-persistent-queue-all ()
   (check
-   (test-persistent-queue)
+   (test-persistent-linked-queue)
    (test-persistent-list-queue)
-   (test-persistent-deque)
+   (test-persistent-linked-deque)
    (test-persistent-list-deque)))
    
 ;; * (time (fill (make-instance 'persistent-list-queue) 100))

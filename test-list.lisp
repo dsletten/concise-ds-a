@@ -30,10 +30,6 @@
 
 (use-package :test)
 
-;; (defmethod fill ((list mutable-list) &key (count 1000) (generator #'identity))
-(defmethod fill ((list list) &key (count 1000) (generator #'identity))
-  (apply #'add list (loop for i from 1 to count collect (funcall generator i))))
-
 (defun test-list-constructor (list-constructor)
   (let ((list (funcall list-constructor)))
     (assert (emptyp list) () "New list should be empty.")

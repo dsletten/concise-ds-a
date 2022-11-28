@@ -38,12 +38,6 @@
 
 (use-package :test)
 
-(defgeneric fill (container &key count generator)
-  (:documentation "Fill up a container for testing purposes."))
-(defmethod fill ((c collection) &key count generator)
-  (declare (ignore c count generator))
-  (error "COLLECTION does not implement FILL"))
-
 (deftest test-array-stack-size ()
   (let ((stack (make-instance 'array-stack :type 'integer))
         (elements '(2 4 6 8 10)))

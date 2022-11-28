@@ -30,16 +30,6 @@
 
 (use-package :test)
 
-(defmethod fill ((queue queue) &key (count 1000) (generator #'identity))
-  (loop for i from 1 to count
-        do (enqueue queue (funcall generator i))
-        finally (return queue)))
-
-;; (defmethod fill ((deque deque) &optional (count 1000))
-;;   (loop for i from 1 to count
-;;         do (enqueue* deque i)
-;;         finally (return deque)))
-
 (defun test-queue-constructor (queue-constructor)
   (let ((queue (funcall queue-constructor)))
     (assert (emptyp queue) () "New queue should be empty.")

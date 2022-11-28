@@ -79,6 +79,12 @@
   (declare (ignore c))
   (error "CONTAINER does not implement CLEAR"))
 
+(defgeneric fill (container &key count generator)
+  (:documentation "Fill up a container for testing purposes."))
+(defmethod fill ((c container) &key count generator)
+  (declare (ignore c count generator))
+  (error "CONTAINER does not implement FILL"))
+
 ;;;
 ;;;    DISPENSER
 ;;;    

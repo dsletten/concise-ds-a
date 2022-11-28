@@ -115,6 +115,16 @@
   (declare (ignore q))
   (error "QUEUE does not implement FRONT"))
 
+(defmethod fill ((queue queue) &key (count 1000) (generator #'identity))
+  (loop for i from 1 to count
+        do (enqueue queue (funcall generator i))
+        finally (return queue)))
+
+;; (defmethod fill ((deque deque) &optional (count 1000))
+;;   (loop for i from 1 to count
+;;         do (enqueue* deque i)
+;;         finally (return deque)))
+
 ;;;
 ;;;    ARRAY-QUEUE - Uses "circular" array. As long as there is room, queue can
 ;;;    wrap around from end of array to start.
@@ -416,27 +426,58 @@
 ;;;      - Similar issues to PERSISTENT-STACK
 ;;;      
 (defclass persistent-queue (queue)
-  ((front :initform '())
-   (rear :initform '())
-   (count :initform 0 :type integer)))
+  ()
+  (:documentation "A queue that defines non-destructive operations."))
+
+(defmethod fill ((queue persistent-queue) &key (count 1000) (generator #'identity))
+  (loop for i from 1 to count
+        for new-queue = (enqueue queue (funcall generator i)) then (enqueue new-queue (funcall generator i))
+        finally (return new-queue)))
+
+;; (defmethod fill ((queue persistent-queue) &key (count 1000) (generator #'identity))
+;;   (labels ((fill-er-up (q i)
+;;              (if (> i count)
+;;                  q
+;;                  (fill-er-up (enqueue q (funcall generator i)) (1+ i)))) )
+;;     (fill-er-up queue 1)))
+
+;; (defmethod fill ((queue persistent-queue) &optional (count 1000))
+;;   (do* ((i 1 (1+ i))
+;;         (new-queue (enqueue queue i) (enqueue new-queue i)))
+;;        ((= i count) new-queue)))
+;;   ;; (loop for i from 1 to count
+;;   ;;       for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
+;;   ;;       finally (return new-queue)))
 
 (defgeneric make-empty-persistent-queue (q)
   (:documentation "Create an empty persistent queue of a given element type."))
 (defmethod make-empty-persistent-queue ((q persistent-queue))
-  (make-instance 'persistent-queue :type (type q)))
+  (declare (ignore q))
+  (error "PERSISTENT-QUEUE does not implement MAKE-EMPTY-PERSISTENT-QUEUE"))
 
-(defmethod size ((q persistent-queue))
+;;;
+;;;    PERSISTENT-LINKED-QUEUE
+;;;
+(defclass persistent-linked-queue (persistent-queue)
+  ((front :initform '())
+   (rear :initform '())
+   (count :initform 0 :type integer)))
+
+(defmethod make-empty-persistent-queue ((q persistent-linked-queue))
+  (make-instance 'persistent-linked-queue :type (type q)))
+
+(defmethod size ((q persistent-linked-queue))
   (with-slots (count) q
     count))
 
-;; (defmethod emptyp ((q persistent-queue))
-;;   (zerop (size q)))
-
-(defmethod clear ((q persistent-queue))
-;  (make-instance 'persistent-queue :type (type q)))
+(defmethod clear ((q persistent-linked-queue))
+;  (make-instance 'persistent-linked-queue :type (type q)))
   (make-empty-persistent-queue q))
 
-(defun initialize-queue (q front rear count)
+;;;
+;;;    This has to be visible for DEQUE. Likewise INITIALIZE-LIST-QUEUE
+;;;    
+(defun initialize-linked-queue (q front rear count)
   (let ((new-queue (make-empty-persistent-queue q)))
     (with-slots ((new-front front) (new-rear rear) (new-count count)) new-queue
       (setf new-front front
@@ -444,19 +485,19 @@
             new-count count))
     new-queue))
 
-(defmethod enqueue ((q persistent-queue) obj)
+(defmethod enqueue ((q persistent-linked-queue) obj)
   (with-slots (front rear count) q
     (if (emptyp q)
-        (initialize-queue q (cl:list obj) '() 1)
-        (initialize-queue q front (cons obj rear) (1+ count)))) )
+        (initialize-linked-queue q (cl:list obj) '() 1)
+        (initialize-linked-queue q front (cons obj rear) (1+ count)))) )
 
-(defmethod dequeue ((q persistent-queue))
+(defmethod dequeue ((q persistent-linked-queue))
   (with-slots (front rear count) q
     (if (null (rest front))
-        (values (initialize-queue q (cl:reverse rear) '() (1- count)) (front q))
-        (values (initialize-queue q (rest front) rear (1- count)) (front q)))) )
+        (values (initialize-linked-queue q (cl:reverse rear) '() (1- count)) (front q))
+        (values (initialize-linked-queue q (rest front) rear (1- count)) (front q)))) )
 
-(defmethod front ((q persistent-queue))
+(defmethod front ((q persistent-linked-queue))
   (with-slots (front) q
     (first front)))
 

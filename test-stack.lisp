@@ -33,14 +33,6 @@
 
 (use-package :test)
 
-;;;
-;;;    Not appropriate for PERSISTENT-STACK!
-;;;    
-(defmethod fill ((stack stack) &key (count 1000) (generator #'identity))
-  (loop for i from 1 to count
-        do (push stack (funcall generator i))
-        finally (return stack)))
-
 (defun test-stack-constructor (stack-constructor)
   (let ((stack (funcall stack-constructor)))
     (assert (emptyp stack) () "New stack should be empty.")
