@@ -38,9 +38,6 @@
   (with-slots (list) q
     (size list)))
 
-;; (defmethod emptyp ((q linked-list-queue))
-;;   (zerop (size q))) ; (null front)
-
 (defmethod clear ((q linked-list-queue))
   (with-slots (list) q
     (clear list)))
@@ -70,9 +67,6 @@
 (defmethod size ((q persistent-list-queue))
   (with-slots (list) q
     (size list)))
-
-(defmethod clear ((q persistent-list-queue))
-  (make-empty-persistent-queue q))
 
 (defun initialize-list-queue (q list)
   (let ((new-queue (make-empty-persistent-queue q)))

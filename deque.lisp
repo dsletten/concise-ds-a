@@ -34,17 +34,6 @@
   ()
   (:documentation "A deque is a double-ended queue allowing ENQUEUE and DEQUEUE operations on both the front and rear."))
 
-;; (defmethod emptyp ((dq deque))
-;;   (zerop (size dq)))
-
-;;;
-;;; ????
-;;; 
-;; (defmethod dequeue :around ((dq deque))
-;;   (if (emptyp dq)
-;;       (error "Deque is empty")
-;;       (call-next-method)))
-
 (defgeneric enqueue* (deque obj)
   (:documentation "Enqueue an object at the front of the deque"))
 (defmethod enqueue* :around ((dq deque) obj)
@@ -78,7 +67,31 @@
 ;;;
 ;;;    Ring buffer deque
 ;;;    
+(defclass array-deque (deque array-queue) ())
 
+(defun make-array-deque (&optional (type t))
+  (make-instance 'array-deque :type type))
+
+(defmethod enqueue* :before ((q array-deque) obj)
+  (declare (ignore obj))
+  (with-slots (store count) q
+    (when (= count (length store))
+      (resize q))))
+(defmethod enqueue* ((q array-deque) obj)
+  (with-slots (store front count) q
+    (setf front (offset q -1)
+          (aref store (offset q 0)) obj)
+    (incf count)))
+
+(defmethod dequeue* ((q array-deque))
+  (with-slots (store front count) q
+    (prog1 (rear q)
+      (setf (aref store (offset q (1- count))) nil)
+      (decf count))))
+
+(defmethod rear ((q array-deque))
+  (with-slots (store count) q
+    (aref store (offset q (1- count)))) )
 
 ;;;
 ;;;    Doubly-linked-list deque
@@ -100,9 +113,9 @@
   (with-slots (list) dq
     (size list)))
 
-;; (defmethod clear ((dq dll-deque))
-;;   (with-slots (list) dq
-;;     (clear list)))
+(defmethod clear ((dq dll-deque))
+  (with-slots (list) dq
+    (clear list)))
 
 (defmethod enqueue ((dq dll-deque) obj)
   (with-slots (list) dq
@@ -145,9 +158,6 @@
 (defmethod size ((dq hash-table-deque))
   (with-slots (store) dq
     (hash-table-count store)))
-
-;; (defmethod emptyp ((dq hash-table-deque))
-;;   (zerop (size dq)))
 
 (defmethod clear ((dq hash-table-deque))
   (with-slots (store front rear) dq
@@ -237,13 +247,16 @@
 
 ;;;
 ;;;    PERSISTENT-DEQUE
-;;;    - Invariant: Tail of FRONT and head of REAR share same first enqueued elt.
-;;;                 FRONT and REAR only null when deque is empty.
 ;;;
 (defclass persistent-deque (persistent-queue deque)
   ()
   (:documentation "A deque that defines non-destructive operations."))
 
+;;;
+;;;    PERSISTENT-LINKED-DEQUE
+;;;    - Invariant: Tail of FRONT and head of REAR share same first enqueued elt.
+;;;                 FRONT and REAR only null when deque is empty.
+;;;    
 (defclass persistent-linked-deque (persistent-deque persistent-linked-queue) ())
 
 (defmethod make-empty-persistent-queue ((dq persistent-linked-deque))
@@ -286,18 +299,7 @@
 ;;;
 ;;;    PERSISTENT-LIST-DEQUE
 ;;;
-;; (defclass persistent-list-deque (deque)
-;;   ((list)))
-
-;; (defmethod initialize-instance :after ((dq deque) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (type list) dq
-;;     (setf list (make-persistent-list :type `(or null ,type)))) )
-
-;; (defclass persistent-list-deque (deque)
-;;   ((list :initform nil)))
-
-(defclass persistent-list-deque (persistent-list-queue deque) ())
+(defclass persistent-list-deque (persistent-deque persistent-list-queue) ())
 
 (defmethod make-empty-persistent-queue ((dq persistent-list-deque))
   (make-instance 'persistent-list-deque :type (type dq)))

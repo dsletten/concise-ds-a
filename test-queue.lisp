@@ -231,6 +231,10 @@
                                   (format t "~A~%" test)
                                   (check (funcall test constructor)))) )))
 
+(deftest test-array-deque ()
+  (check
+   (deque-test-suite #'make-array-deque)))
+
 (deftest test-dll-deque ()
   (check
    (deque-test-suite #'make-dll-deque)))
@@ -248,5 +252,6 @@
    (test-recycling-queue)
    (test-ring-buffer)
    (test-hash-table-queue)
+   (test-array-deque)
    (test-dll-deque)
    (test-hash-table-deque)))

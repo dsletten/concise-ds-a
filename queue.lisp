@@ -130,6 +130,7 @@
 ;;;    wrap around from end of array to start.
 ;;;    - Ring buffer
 ;;;    - Never shrinks?!
+;;;    - CLEAR -> resize STORE??
 ;;;    
 (defconstant array-queue-capacity 20)
 
@@ -146,9 +147,6 @@
 (defmethod size ((q array-queue))
   (with-slots (count) q
     count))
-
-;; (defmethod emptyp ((q array-queue))
-;;   (zerop (size q)))
 
 ;;;
 ;;;    This is not good enough. Must release the references to elements. Use superclass method.
@@ -173,33 +171,68 @@
 ;;     (when (= (size q) (length store))
 ;;       (resize q))
 ;;     (call-next-method)))
-(defmethod enqueue :before ((q array-queue) obj)
-  (declare (ignore obj))
-  (with-slots (store) q
-    (when (= (size q) (length store))
-      (resize q))))
-(defmethod enqueue ((q array-queue) obj)
-  (with-slots (store front count) q
-    (setf (aref store (mod (+ front count) (length store))) obj)
-    (incf count)))
 
 ;;;
 ;;;    Use SUBSEQ??
 ;;;    
-(defun resize (q)
-  (with-slots (store front count) q
-    (let* ((length (length store))
-           (new-store (make-array (* 2 length) :element-type (type q))))
+;; (flet ((offset (q i)
+;;          (with-slots (store front) q
+;;            (mod (+ front i) (length store)))) )
+;;   (defmethod enqueue :before ((q array-queue) obj)
+;;     (declare (ignore obj))
+;;     (with-slots (store front count) q
+;;       (let ((length (length store)))
+;;         (flet ((resize ()
+;;                  (let ((new-store (make-array (* 2 length) :element-type (type q))))
+;;                    (dotimes (i count)
+;;                      (setf (aref new-store i) (aref store (offset q i))))
+;;                    (setf store new-store
+;;                          front 0))))
+;;           (when (= count length)
+;;             (resize)))) ))
+;;   (defmethod enqueue ((q array-queue) obj)
+;;     (with-slots (store count) q
+;;       (setf (aref store (offset q count)) obj)
+;;       (incf count)))
+;;   (defmethod dequeue ((q array-queue))
+;;     (with-slots (store front count) q
+;;       (prog1 (front q)
+;;         (setf (aref store front) nil
+;;               front (offset q 1))
+;;         (decf count)))) )
+
+;; (defmethod front ((q array-queue))
+;;   (with-slots (store front) q
+;;     (aref store front)))
+
+(defun offset (q i) ; ARRAY-QUEUE-OFFSET?
+  (with-slots (store front) q
+    (mod (+ front i) (length store))))
+
+(defun resize (q) ; Generic function?? GROW? SHRINK?
+  (with-slots (front store count) q
+    (assert (= count (length store)) () "RESIZE called without full STORE.")
+    (let ((new-store (make-array (* 2 count) :element-type (type q))))
       (dotimes (i count)
-        (setf (aref new-store i) (aref store (mod (+ front i) length))))
+        (setf (aref new-store i) (aref store (offset q i))))
       (setf store new-store
             front 0))))
+
+(defmethod enqueue :before ((q array-queue) obj)
+  (declare (ignore obj))
+  (with-slots (store count) q
+    (when (= count (length store))
+      (resize q))))
+(defmethod enqueue ((q array-queue) obj)
+  (with-slots (store count) q
+    (setf (aref store (offset q count)) obj)
+    (incf count)))
 
 (defmethod dequeue ((q array-queue))
   (with-slots (store front count) q
     (prog1 (front q)
       (setf (aref store front) nil
-            front (mod (1+ front) (length store)))
+            front (offset q 1))
       (decf count))))
 
 (defmethod front ((q array-queue))
@@ -218,9 +251,6 @@
 (defmethod size ((q linked-queue))
   (with-slots (count) q
     count))
-
-;; (defmethod emptyp ((q linked-queue))
-;;   (zerop (size q))) ; (null front)
 
 (defmethod clear ((q linked-queue))
   (with-slots (front rear count) q
@@ -262,9 +292,6 @@
 (defmethod size ((q circular-queue))
   (with-slots (count) q
     count))
-
-;; (defmethod emptyp ((q circular-queue))
-;;   (zerop (size q)))
 
 (defmethod clear ((q circular-queue))
   (with-slots (index count) q
@@ -316,7 +343,7 @@
   (loop until (emptyp q) do (dequeue q)))
 
 (defmethod enqueue ((q recycling-queue) obj)
-  (with-slots (front rear ass count) q
+  (with-slots (rear ass count) q
     (setf (car rear) obj)
     (when (eq rear ass)
       (let ((more (make-list (1+ count))))
@@ -336,7 +363,7 @@
 ;;               front next))
 ;;       (decf count))))
 (defmethod dequeue ((q recycling-queue))
-  (with-slots (front rear ass count) q
+  (with-slots (front ass count) q
     (prog1 (front q)
       (setf (cdr ass) front
             ass front
@@ -374,7 +401,7 @@
     (incf count)))
 
 (defmethod dequeue ((q ring-buffer))
-  (with-slots (front rear count) q
+  (with-slots (front count) q
     (prog1 (front q)
       (setf (car front) nil
             front (cdr front))
@@ -394,9 +421,6 @@
 (defmethod size ((q hash-table-queue))
   (with-slots (store) q
     (hash-table-count store)))
-
-;; (defmethod emptyp ((q hash-table-queue))
-;;   (zerop (size q)))
 
 (defmethod clear ((q hash-table-queue))
   (with-slots (store front rear) q
@@ -428,6 +452,9 @@
 (defclass persistent-queue (queue)
   ()
   (:documentation "A queue that defines non-destructive operations."))
+
+(defmethod clear ((q persistent-queue))
+  (make-empty-persistent-queue q))
 
 (defmethod fill ((queue persistent-queue) &key (count 1000) (generator #'identity))
   (loop for i from 1 to count
@@ -469,10 +496,6 @@
 (defmethod size ((q persistent-linked-queue))
   (with-slots (count) q
     count))
-
-(defmethod clear ((q persistent-linked-queue))
-;  (make-instance 'persistent-linked-queue :type (type q)))
-  (make-empty-persistent-queue q))
 
 ;;;
 ;;;    This has to be visible for DEQUE. Likewise INITIALIZE-LIST-QUEUE
