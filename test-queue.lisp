@@ -192,6 +192,10 @@
   (check
    (queue-test-suite #'(lambda () (make-instance 'linked-queue)))) )
 
+(deftest test-array-list-queue ()
+  (check
+   (queue-test-suite #'(lambda () (make-instance 'array-list-queue)))) )
+
 (deftest test-linked-list-queue ()
   (check
    (queue-test-suite #'(lambda () (make-instance 'linked-list-queue)))) )
@@ -235,6 +239,14 @@
   (check
    (deque-test-suite #'make-array-deque)))
 
+(deftest test-array-list-deque ()
+  (check
+   (deque-test-suite #'make-array-list-deque)))
+
+(deftest test-linked-list-deque ()
+  (check
+   (deque-test-suite #'make-linked-list-deque)))
+
 (deftest test-dll-deque ()
   (check
    (deque-test-suite #'make-dll-deque)))
@@ -247,11 +259,14 @@
   (check
    (test-array-queue)
    (test-linked-queue)
+   (test-array-list-queue)
    (test-linked-list-queue)
    (test-circular-queue)
    (test-recycling-queue)
    (test-ring-buffer)
    (test-hash-table-queue)
    (test-array-deque)
+   (test-array-list-deque)
+   (test-linked-list-deque)
    (test-dll-deque)
    (test-hash-table-deque)))

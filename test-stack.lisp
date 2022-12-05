@@ -113,6 +113,7 @@
 
 (defun test-stack-time (stack-constructor &optional (count 100000))
   (let ((stack (funcall stack-constructor)))
+broadcast-stream
     (time
      (dotimes (i 10 t)
        (fill stack :count count)

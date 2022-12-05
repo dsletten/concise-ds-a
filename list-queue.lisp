@@ -28,6 +28,32 @@
 (in-package :containers)
 
 ;;;
+;;;    ARRAY-LIST-QUEUE
+;;;    
+(defclass array-list-queue (queue)
+  ((list :initform (make-array-list-x)))) ; FILL-ELT is never used!!
+
+(defmethod size ((q array-list-queue))
+  (with-slots (list) q
+    (size list)))
+
+(defmethod clear ((q array-list-queue))
+  (with-slots (list) q
+    (clear list)))
+
+(defmethod enqueue ((q array-list-queue) obj)
+  (with-slots (list) q
+    (add list obj)))
+
+(defmethod dequeue ((q array-list-queue))
+  (with-slots (list) q
+    (delete list 0)))
+
+(defmethod front ((q array-list-queue))
+  (with-slots (list) q
+    (nth list 0)))
+
+;;;
 ;;;    LINKED-LIST-QUEUE
 ;;;    - This is a TCONC queue wrapped by a list.
 ;;;    

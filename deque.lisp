@@ -72,26 +72,67 @@
 (defun make-array-deque (&optional (type t))
   (make-instance 'array-deque :type type))
 
-(defmethod enqueue* :before ((q array-deque) obj)
+(defmethod enqueue* :before ((dq array-deque) obj)
   (declare (ignore obj))
-  (with-slots (store count) q
+  (with-slots (store count) dq
     (when (= count (length store))
-      (resize q))))
-(defmethod enqueue* ((q array-deque) obj)
-  (with-slots (store front count) q
-    (setf front (offset q -1)
-          (aref store (offset q 0)) obj)
+      (resize dq))))
+(defmethod enqueue* ((dq array-deque) obj)
+  (with-slots (store front count) dq
+    (setf front (offset dq -1)
+          (aref store (offset dq 0)) obj)
     (incf count)))
 
-(defmethod dequeue* ((q array-deque))
-  (with-slots (store front count) q
-    (prog1 (rear q)
-      (setf (aref store (offset q (1- count))) nil)
+(defmethod dequeue* ((dq array-deque))
+  (with-slots (store front count) dq
+    (prog1 (rear dq)
+      (setf (aref store (offset dq (1- count))) nil)
       (decf count))))
 
-(defmethod rear ((q array-deque))
-  (with-slots (store count) q
-    (aref store (offset q (1- count)))) )
+(defmethod rear ((dq array-deque))
+  (with-slots (store count) dq
+    (aref store (offset dq (1- count)))) )
+
+;;;
+;;;    ARRAY-LIST-DEQUE
+;;;    
+(defclass array-list-deque (deque array-list-queue) ())
+
+(defun make-array-list-deque (&optional (type t))
+  (make-instance 'array-list-deque :type type))
+
+(defmethod enqueue* ((dq array-list-deque) obj) ; Likely horrible performance!!!
+  (with-slots (list) dq
+    (insert list 0 obj)))
+
+(defmethod dequeue* ((dq array-list-deque))
+  (with-slots (list) dq
+    (prog1 (rear dq)
+      (delete list -1))))
+
+(defmethod rear ((dq array-list-deque))
+  (with-slots (list) dq
+    (nth list -1)))
+
+;;;
+;;;    LINKED-LIST-DEQUE
+;;;    
+(defclass linked-list-deque (deque linked-list-queue) ())
+
+(defun make-linked-list-deque (&optional (type t))
+  (make-instance 'linked-list-deque :type type))
+
+(defmethod enqueue* ((dq linked-list-deque) obj)
+  (with-slots (list) dq
+    (insert list 0 obj)))
+
+(defmethod dequeue* ((dq linked-list-deque)) ; Not great performance!
+  (with-slots (list) dq
+    (delete list -1)))
+
+(defmethod rear ((dq linked-list-deque))
+  (with-slots (list) dq
+    (nth list -1)))
 
 ;;;
 ;;;    Doubly-linked-list deque
