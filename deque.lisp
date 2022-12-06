@@ -69,7 +69,7 @@
 ;;;    
 (defclass array-deque (deque array-queue) ())
 
-(defun make-array-deque (&optional (type t))
+(defun make-array-deque (&key (type t))
   (make-instance 'array-deque :type type))
 
 (defmethod enqueue* :before ((dq array-deque) obj)
@@ -98,7 +98,7 @@
 ;;;    
 (defclass array-list-deque (deque array-list-queue) ())
 
-(defun make-array-list-deque (&optional (type t))
+(defun make-array-list-deque (&key (type t))
   (make-instance 'array-list-deque :type type))
 
 (defmethod enqueue* ((dq array-list-deque) obj) ; Likely horrible performance!!!
@@ -119,7 +119,7 @@
 ;;;    
 (defclass linked-list-deque (deque linked-list-queue) ())
 
-(defun make-linked-list-deque (&optional (type t))
+(defun make-linked-list-deque (&key (type t))
   (make-instance 'linked-list-deque :type type))
 
 (defmethod enqueue* ((dq linked-list-deque) obj)
@@ -145,7 +145,7 @@
 ;;   (with-slots (type list) dq
 ;;     (setf list (make-doubly-linked-list :type `(or null ,type)))) ) ; ?? FILL-ELT is never used!!
 
-(defun make-dll-deque (&optional (type t))
+(defun make-dll-deque (&key (type t))
   (make-instance 'dll-deque :type type))
 ;  (make-instance 'dll-deque :type type :list (make-doubly-linked-list :type type))) ; ??
 ;  (make-instance 'dll-deque :type type :list (make-doubly-linked-list))) ; ??
@@ -193,7 +193,7 @@
    (front :initform 0)
    (rear :initform 0)))
 
-(defun make-hash-table-deque (&optional (type t))
+(defun make-hash-table-deque (&key (type t))
   (make-instance 'hash-table-deque :type type))
 
 (defmethod size ((dq hash-table-deque))
@@ -267,7 +267,7 @@
 ;;;
 ;; (defclass hash-table-deque-x (deque hash-table-queue) ())
 
-;; (defun make-hash-table-deque-x (&optional (type t))
+;; (defun make-hash-table-deque-x (&key (type t))
 ;;   (make-instance 'hash-table-deque-x :type type))
 
 ;; (defmethod enqueue* ((dq hash-table-deque-x) obj)

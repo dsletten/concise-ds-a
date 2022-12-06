@@ -69,38 +69,83 @@
 (defun test-persistent-queue-emptyp (queue-constructor)
   (let ((queue (funcall queue-constructor)))
     (assert (emptyp queue) () "New queue should be empty.")
-    (assert (not (emptyp (enqueue queue t))) () "Queue with elt should not be empty.")
-    (assert (emptyp (dequeue (enqueue queue t))) () "Empty queue should be empty.")
+    (setf queue (enqueue queue t))
+    (assert (not (emptyp queue)) () "Queue with elt should not be empty.")
+    (setf queue (dequeue queue))
+    (assert (emptyp queue) () "Empty queue should be empty.")
     t))
 
 (defun test-persistent-deque-emptyp (deque-constructor)
   (let ((deque (funcall deque-constructor)))
     (assert (emptyp deque) () "New deque should be empty.")
-    (assert (not (emptyp (enqueue* deque t))) () "Deque with elt should not be empty.")
-    (assert (emptyp (dequeue* (enqueue* deque t))) () "Empty deque should be empty.")
+    (setf deque (enqueue* deque t))
+    (assert (not (emptyp deque)) () "Deque with elt should not be empty.")
+    (setf deque (dequeue* deque))
+    (assert (emptyp deque) () "Empty deque should be empty.")
     t))
 
 (defun test-persistent-queue-size (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
     (assert (zerop (size queue)) () "Size of new queue should be zero.")
     (loop for i from 1 to count
-          for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
-          do (assert (= (size new-queue) i) () "Size of queue should be ~D." i)
-          finally (return t))))
+          do (setf queue (enqueue queue i))
+             (assert (= (size queue) i) () "Size of queue should be ~D." i))
+    (loop for i from (1- count) downto 0
+          do (setf queue (dequeue queue))
+             (assert (= (size queue) i) () "Size of queue should be ~D." i)))
+  t)
 
 (defun test-persistent-deque-size (deque-constructor &optional (count 1000))
   (let ((deque (funcall deque-constructor)))
     (assert (zerop (size deque)) () "Size of new deque should be zero.")
     (loop for i from 1 to count
-          for new-deque = (enqueue* deque i) then (enqueue* new-deque i)   ; ??????? Scope problem without renaming?!??!
-          do (assert (= (size new-deque) i) () "Size of deque should be ~D." i)
-          finally (return t))))
+          do (setf deque (enqueue* deque i))
+             (assert (= (size deque) i) () "Size of deque should be ~D." i))
+    (loop for i from (1- count) downto 0
+          do (setf deque (dequeue* deque))
+             (assert (= (size deque) i) () "Size of deque should be ~D." i)))
+  t)
 
 (defun test-persistent-queue-clear (queue-constructor &optional (count 1000))
   (let ((queue (fill (funcall queue-constructor) :count count)))
     (assert (not (emptyp queue)) () "Queue should have ~D elements." count)
-    (assert (emptyp (clear queue)) () "Queue should be empty.")
-    (assert (zerop (size (clear queue))) () "Size of queue should be 0."))
+    (setf queue (clear queue))
+    (assert (emptyp queue) () "Queue should be empty.")
+    (assert (zerop (size queue)) () "Size of queue should be 0."))
+  t)
+
+(defun test-persistent-queue-enqueue (queue-constructor &optional (count 1000))
+  (let ((queue (funcall queue-constructor)))
+    (loop for i from 1 to count
+          do (let ((dequeued (nth-value 1 (dequeue (enqueue queue i)))) )
+               (assert (= i dequeued) () "Wrong value enqueued: ~A should be: ~A~%" dequeued i))))
+  t)
+
+(defun test-persistent-queue-enqueue-wrong-type (queue-constructor)
+  (let ((queue (funcall queue-constructor :type 'integer)))
+    (handler-case (enqueue queue 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ENQUEUE value of wrong type onto queue.~%"))))
+  t)
+
+(defun test-persistent-deque-enqueue* (deque-constructor &optional (count 1000))
+  (let ((deque (funcall deque-constructor)))
+    (loop for i from 1 to count
+          do (let ((dequeued (nth-value 1 (dequeue* (enqueue* deque i)))) )
+               (assert (= i dequeued) () "Wrong value enqueued at rear: ~A should be: ~A~%" dequeued i))))
+  t)
+
+(defun test-persistent-deque-enqueue*-wrong-type (deque-constructor)
+  (let ((deque (funcall deque-constructor :type 'integer)))
+    (handler-case (enqueue* deque 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ENQUEUE* value of wrong type onto deque.~%"))))
   t)
 
 (defun test-persistent-queue-front-dequeue (queue-constructor &optional (count 1000))
@@ -117,30 +162,28 @@
   (let ((deque (fill (funcall deque-constructor) :count count)))
     (loop repeat (size deque)
           for rear = (rear deque)
-          do (multiple-value-bind (d dequeued) (dequeue* deque)
-               (setf deque d)
+          do (multiple-value-bind (dq dequeued) (dequeue* deque)
+               (setf deque dq)
                (assert (= rear dequeued) () "Wrong value dequeued from rear: ~A should be: ~A~%" dequeued rear)))
     (assert (emptyp deque) () "Deque should be empty."))
   t)
 
 ;(defun test-persistent-queue-time (queue-constructor &optional (count 100000))
-(defun test-persistent-queue-time (queue-constructor &optional (count 1000))
-  (let ((queue (funcall queue-constructor)))
-    (time
-     (dotimes (i 10 t)
-       (loop for new-queue = (fill queue :count count) then (dequeue new-queue)
-             until (emptyp new-queue)))) ))
+(defun test-persistent-queue-time (queue-constructor &optional (count 10000))
+  (time
+   (dotimes (i 10 t)
+     (loop for queue = (fill (funcall queue-constructor) :count count) then (dequeue queue)
+           until (emptyp queue)))) )
 
-(defun test-persistent-deque-time (deque-constructor &optional (count 1000))
-  (let ((deque (funcall deque-constructor)))
+(defun test-persistent-deque-time (deque-constructor &optional (count 10000))
+  (flet ((fill-deque ()
+           (loop for i from 1 to count
+                 for deque = (enqueue* (funcall deque-constructor) i) then (enqueue* deque i)
+                 finally (return deque))))
     (time
      (dotimes (i 10 t)
-       (dotimes (j count)
-         (let ((deque (loop for i from 1 to count
-                            for new-deque = (enqueue* deque i) then (enqueue* new-deque i)
-                            finally (return new-deque))))
-           (loop for new-deque = (dequeue* deque) then (dequeue* new-deque)
-                 until (emptyp new-deque)))) ))))
+         (loop for deque = (fill-deque) then (dequeue* deque)
+               until (emptyp deque)))) ))
 
 (deftest persistent-queue-test-suite (constructor)
   (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
@@ -148,6 +191,8 @@
                  test-persistent-queue-emptyp
                  test-persistent-queue-size
                  test-persistent-queue-clear
+                 test-persistent-queue-enqueue
+                 test-persistent-queue-enqueue-wrong-type
                  test-persistent-queue-front-dequeue
                  test-persistent-queue-time)))
     (notany #'null (loop for test in tests
@@ -156,17 +201,14 @@
                                   (check (funcall test constructor)))) )))
 
 (deftest persistent-deque-test-suite (constructor)
+  (persistent-queue-test-suite constructor)
   (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
-  (let ((tests '(test-persistent-queue-constructor
-                 test-persistent-deque-constructor
-                 test-persistent-queue-emptyp
+  (let ((tests '(test-persistent-deque-constructor
                  test-persistent-deque-emptyp
-                 test-persistent-queue-size
                  test-persistent-deque-size
-                 test-persistent-queue-clear
-                 test-persistent-queue-front-dequeue
+                 test-persistent-deque-enqueue*
+                 test-persistent-deque-enqueue*-wrong-type
                  test-persistent-deque-rear-dequeue*
-                 test-persistent-queue-time
                  test-persistent-deque-time)))
     (notany #'null (loop for test in tests
                          collect (progn
@@ -175,19 +217,19 @@
 
 (deftest test-persistent-linked-queue ()
   (check
-   (persistent-queue-test-suite #'(lambda () (make-instance 'persistent-linked-queue)))) )
+   (persistent-queue-test-suite #'(lambda (&key (type t)) (make-instance 'persistent-linked-queue :type type)))) )
 
 (deftest test-persistent-list-queue ()
   (check
-   (persistent-queue-test-suite #'(lambda () (make-instance 'persistent-list-queue)))) )
+   (persistent-queue-test-suite #'(lambda (&key (type t)) (make-instance 'persistent-list-queue :type type)))) )
 
 (deftest test-persistent-linked-deque ()
   (check
-   (persistent-deque-test-suite #'(lambda () (make-instance 'persistent-linked-deque)))) )
+   (persistent-deque-test-suite #'(lambda (&key (type t)) (make-instance 'persistent-linked-deque :type type)))) )
 
 (deftest test-persistent-list-deque ()
   (check
-   (persistent-deque-test-suite #'(lambda () (make-instance 'persistent-list-deque)))) )
+   (persistent-deque-test-suite #'(lambda (&key (type t)) (make-instance 'persistent-list-deque :type type)))) )
 
 (deftest test-persistent-queue-all ()
   (check

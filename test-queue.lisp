@@ -113,6 +113,45 @@
     (assert (not (emptyp queue)) () "Emptying queue should not break it.")
     t))
 
+;;;
+;;;    Not as straightforward as TEST-STACK-PUSH...
+;;;    
+(defun test-queue-enqueue (queue-constructor &optional (count 1000))
+  (let ((queue (funcall queue-constructor)))
+    (loop for i from 1 to count
+          do (enqueue queue i)
+             (let ((dequeued (dequeue queue)))
+               (assert (= i dequeued) () "Wrong value enqueued: ~A should be: ~A~%" dequeued i))))
+  t)
+
+(defun test-queue-enqueue-wrong-type (queue-constructor)
+  (let ((queue (funcall queue-constructor :type 'integer)))
+    (handler-case (enqueue queue 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ENQUEUE value of wrong type onto queue.~%"))))
+  t)
+
+(defun test-deque-enqueue* (deque-constructor &optional (count 1000))
+  (let ((deque (funcall deque-constructor)))
+    (loop for i from 1 to count
+          do (enqueue* deque i)
+             (let ((dequeued (dequeue* deque)))
+               (assert (= i dequeued) () "Wrong value enqueued at rear: ~A should be: ~A~%" dequeued i))))
+  t)
+
+(defun test-deque-enqueue*-wrong-type (deque-constructor)
+  (let ((deque (funcall deque-constructor :type 'integer)))
+    (handler-case (enqueue* deque 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ENQUEUE* value of wrong type onto deque.~%"))))
+  t)
+
 (defun test-queue-front-dequeue (queue-constructor &optional (count 1000))
   (let ((queue (fill (funcall queue-constructor) :count count)))
     (loop repeat (size queue)
@@ -176,9 +215,26 @@
                  test-queue-emptyp
                  test-queue-size
                  test-queue-clear
+                 test-queue-enqueue
+                 test-queue-enqueue-wrong-type
                  test-queue-front-dequeue
                  test-queue-time
                  test-queue-wave)))
+    (notany #'null (loop for test in tests
+                         collect (progn
+                                  (format t "~A~%" test)
+                                  (check (funcall test constructor)))) )))
+
+(deftest deque-test-suite (constructor)
+  (queue-test-suite constructor)
+  (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
+  (let ((tests '(test-deque-constructor
+                 test-deque-emptyp
+                 test-deque-size
+                 test-deque-enqueue*
+                 test-deque-enqueue*-wrong-type
+                 test-deque-rear-dequeue*
+                 test-deque-time)))
     (notany #'null (loop for test in tests
                          collect (progn
                                   (format t "~A~%" test)
@@ -186,54 +242,35 @@
 
 (deftest test-array-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'array-queue)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'array-queue :type type)))) )
 
 (deftest test-linked-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'linked-queue)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'linked-queue :type type)))) )
 
 (deftest test-array-list-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'array-list-queue)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'array-list-queue :type type)))) )
 
 (deftest test-linked-list-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'linked-list-queue)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'linked-list-queue :type type)))) )
 
 (deftest test-circular-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'circular-queue)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'circular-queue :type type)))) )
 
 (deftest test-recycling-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'recycling-queue)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'recycling-queue :type type)))) )
 
 (deftest test-ring-buffer ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'ring-buffer)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'ring-buffer :type type)))) )
 
 (deftest test-hash-table-queue ()
   (check
-   (queue-test-suite #'(lambda () (make-instance 'hash-table-queue)))) )
-
-(deftest deque-test-suite (constructor)
-  (format t "Testing ~A~%" (class-name (class-of (funcall constructor))))
-  (let ((tests '(test-queue-constructor
-                 test-deque-constructor
-                 test-queue-emptyp
-                 test-deque-emptyp
-                 test-queue-size
-                 test-deque-size
-                 test-queue-clear
-                 test-queue-front-dequeue
-                 test-deque-rear-dequeue*
-                 test-queue-time
-                 test-deque-time
-                 test-queue-wave)))
-    (notany #'null (loop for test in tests
-                         collect (progn
-                                  (format t "~A~%" test)
-                                  (check (funcall test constructor)))) )))
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'hash-table-queue :type type)))) )
 
 (deftest test-array-deque ()
   (check
