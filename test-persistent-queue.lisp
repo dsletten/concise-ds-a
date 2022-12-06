@@ -111,7 +111,9 @@
     (assert (not (emptyp queue)) () "Queue should have ~D elements." count)
     (setf queue (clear queue))
     (assert (emptyp queue) () "Queue should be empty.")
-    (assert (zerop (size queue)) () "Size of queue should be 0."))
+    (assert (zerop (size queue)) () "Size of queue should be 0.")
+    (setf queue (fill queue :count count))
+    (assert (not (emptyp queue)) () "Emptying queue should not break it."))
   t)
 
 (defun test-persistent-queue-enqueue (queue-constructor &optional (count 1000))
@@ -135,7 +137,7 @@
   (let ((deque (funcall deque-constructor)))
     (loop for i from 1 to count
           do (let ((dequeued (nth-value 1 (dequeue* (enqueue* deque i)))) )
-               (assert (= i dequeued) () "Wrong value enqueued at rear: ~A should be: ~A~%" dequeued i))))
+               (assert (= i dequeued) () "Wrong value enqueued at front: ~A should be: ~A~%" dequeued i))))
   t)
 
 (defun test-persistent-deque-enqueue*-wrong-type (deque-constructor)
