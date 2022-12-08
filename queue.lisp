@@ -22,12 +22,12 @@
 ;;;;   Example:
 ;;;;
 ;;;;   Notes:
-;;;;   - ARRAY-QUEUE is the traditional ring buffer. (另见 (ADJUSTABLE-)CIRCULAR-ARRAY-QUEUE in "foundations")
-;;;;   - CIRCULAR-QUEUE, RECYCLING-QUEUE, and RING-BUFFER are just variants of LINKED-QUEUE:
-;;;;     (RECYCLING-QUEUE and RING-BUFFER require inapproriate access to slots in LINKED-QUEUE)???
+;;;;   - ARRAY-RING-BUFFER is the traditional ring buffer. (另见 (ADJUSTABLE-)CIRCULAR-ARRAY-QUEUE in "foundations")
+;;;;   - CIRCULAR-QUEUE, RECYCLING-QUEUE, and LINKED-RING-BUFFER are just variants of LINKED-QUEUE:
+;;;;     (RECYCLING-QUEUE and LINKED-RING-BUFFER require inapproriate access to slots in LINKED-QUEUE)???
 ;;;;     - CIRCULAR-QUEUE grows/shrinks with each operation.
-;;;;     - RECYCLING-QUEUE/RING-BUFFER start pre-allocated, overwrite existing CONSes, grow as needed and never shrink.
-;;;;       - At first glance, RECYCLING-QUEUE appears to be an interesting variation. In fact, it is only trivially different from RING-BUFFER
+;;;;     - RECYCLING-QUEUE/LINKED-RING-BUFFER start pre-allocated, overwrite existing CONSes, grow as needed and never shrink.
+;;;;       - At first glance, RECYCLING-QUEUE appears to be an interesting variation. In fact, it is only trivially different from LINKED-RING-BUFFER
 ;;;;         and requires 3 extra SETFs for each DEQUEUE. ENQUEUE is similar for each.
 ;;;;
 ;;;;         Effectively, RECYCLING-QUEUE's DEQUEUE unlinks the previous `front` of the queue and links it to the end so that the
@@ -43,7 +43,7 @@
 ;;;;          v        v                 v          v
 ;;;;          9        10               NIL        NIL
 ;;;;          
-;;;;         By contrast, RING-BUFFER is a circular list, so the FRONT pointer just moves along as needed after each DEQUEUE.
+;;;;         By contrast, LINKED-RING-BUFFER is a circular list, so the FRONT pointer just moves along as needed after each DEQUEUE.
 ;;;;         Before
 ;;;;         #1=[*|*]--->[*|*]--->[*|*]---> ... --->[*|*]--->#1#
 ;;;;             |        |        |                 |
@@ -125,33 +125,36 @@
 ;;         do (enqueue* deque i)
 ;;         finally (return deque)))
 
+(defgeneric resize (queue)
+  (:documentation "Resize the queue when it is full.")) ; Shrink??
+
 ;;;
-;;;    ARRAY-QUEUE - Uses "circular" array. As long as there is room, queue can
+;;;    ARRAY-RING-BUFFER - Uses "circular" array. As long as there is room, queue can
 ;;;    wrap around from end of array to start.
-;;;    - Ring buffer
 ;;;    - Never shrinks?!
 ;;;    - CLEAR -> resize STORE??
 ;;;    
-(defconstant array-queue-capacity 20)
+(defconstant array-ring-buffer-capacity 20)
 
-(defclass array-queue (queue)
+;(defclass array-queue (queue)
+(defclass array-ring-buffer (queue)
   ((store)
    (front :initform 0) ; As long as queue is not empty FRONT is index of first queue elt.
    (count :initform 0)))
 
-(defmethod initialize-instance :after ((q array-queue) &rest initargs)
+(defmethod initialize-instance :after ((q array-ring-buffer) &rest initargs)
   (declare (ignore initargs))
   (with-slots (store) q
-    (setf store (make-array array-queue-capacity :element-type (type q)))) )
+    (setf store (make-array array-ring-buffer-capacity :element-type (type q)))) )
 
-(defmethod size ((q array-queue))
+(defmethod size ((q array-ring-buffer))
   (with-slots (count) q
     count))
 
 ;;;
 ;;;    This is not good enough. Must release the references to elements. Use superclass method.
 ;;;    
-;; (defmethod clear ((q array-queue))
+;; (defmethod clear ((q array-ring-buffer))
 ;;   (with-slots (front count) q
 ;;     (setf front 0
 ;;           count 0)))
@@ -162,11 +165,11 @@
 ;;;   1. When filled, signal error. Can't add any more...
 ;;;   2. Expand the array store. This requires realigning any "wrapped around" elements. No mechanism to ever shrink?
 ;;;   
-;; (defmethod enqueue :around ((q array-queue) obj)
-;;   (if (= (size q) array-queue-capacity)
+;; (defmethod enqueue :around ((q array-ring-buffer) obj)
+;;   (if (= (size q) array-ring-buffer-capacity)
 ;;       (error "Queue is full")
 ;;       (call-next-method)))
-;; (defmethod enqueue :around ((q array-queue) obj) ; This is called before the QUEUE :AROUND method. We resize before checking whether type is allowed?!
+;; (defmethod enqueue :around ((q array-ring-buffer) obj) ; This is called before the QUEUE :AROUND method. We resize before checking whether type is allowed?!
 ;;   (with-slots (store) q
 ;;     (when (= (size q) (length store))
 ;;       (resize q))
@@ -178,7 +181,7 @@
 ;; (flet ((offset (q i)
 ;;          (with-slots (store front) q
 ;;            (mod (+ front i) (length store)))) )
-;;   (defmethod enqueue :before ((q array-queue) obj)
+;;   (defmethod enqueue :before ((q array-ring-buffer) obj)
 ;;     (declare (ignore obj))
 ;;     (with-slots (store front count) q
 ;;       (let ((length (length store)))
@@ -190,26 +193,26 @@
 ;;                          front 0))))
 ;;           (when (= count length)
 ;;             (resize)))) ))
-;;   (defmethod enqueue ((q array-queue) obj)
+;;   (defmethod enqueue ((q array-ring-buffer) obj)
 ;;     (with-slots (store count) q
 ;;       (setf (aref store (offset q count)) obj)
 ;;       (incf count)))
-;;   (defmethod dequeue ((q array-queue))
+;;   (defmethod dequeue ((q array-ring-buffer))
 ;;     (with-slots (store front count) q
 ;;       (prog1 (front q)
 ;;         (setf (aref store front) nil
 ;;               front (offset q 1))
 ;;         (decf count)))) )
 
-;; (defmethod front ((q array-queue))
+;; (defmethod front ((q array-ring-buffer))
 ;;   (with-slots (store front) q
 ;;     (aref store front)))
 
-(defun offset (q i) ; ARRAY-QUEUE-OFFSET?
+(defun offset (q i) ; ARRAY-RING-BUFFER-OFFSET?
   (with-slots (store front) q
     (mod (+ front i) (length store))))
 
-(defun resize (q) ; Generic function?? GROW? SHRINK?
+(defmethod resize ((q array-ring-buffer))
   (with-slots (front store count) q
     (assert (= count (length store)) () "RESIZE called without full STORE.")
     (let ((new-store (make-array (* 2 count) :element-type (type q))))
@@ -218,24 +221,24 @@
       (setf store new-store
             front 0))))
 
-(defmethod enqueue :before ((q array-queue) obj)
+(defmethod enqueue :before ((q array-ring-buffer) obj)
   (declare (ignore obj))
   (with-slots (store count) q
     (when (= count (length store))
       (resize q))))
-(defmethod enqueue ((q array-queue) obj)
+(defmethod enqueue ((q array-ring-buffer) obj)
   (with-slots (store count) q
     (setf (aref store (offset q count)) obj)
     (incf count)))
 
-(defmethod dequeue ((q array-queue))
+(defmethod dequeue ((q array-ring-buffer))
   (with-slots (store front count) q
     (prog1 (front q)
       (setf (aref store front) nil
             front (offset q 1))
       (decf count))))
 
-(defmethod front ((q array-queue))
+(defmethod front ((q array-ring-buffer))
   (with-slots (store front) q
     (aref store front)))
 
@@ -344,12 +347,12 @@
 
 (defmethod enqueue ((q recycling-queue) obj)
   (with-slots (rear ass count) q
-    (setf (car rear) obj)
+    (setf (first rear) obj)
     (when (eq rear ass)
       (let ((more (make-list (1+ count))))
-        (setf (cdr ass) more
+        (setf (rest ass) more
               ass (last more))))
-    (setf rear (cdr rear))
+    (setf rear (rest rear))
     (incf count)))
 
 ;; (defmethod dequeue ((q recycling-queue))
@@ -365,46 +368,54 @@
 (defmethod dequeue ((q recycling-queue))
   (with-slots (front ass count) q
     (prog1 (front q)
-      (setf (cdr ass) front
+      (setf (rest ass) front
             ass front
-            front (cdr front)
-            (car ass) nil
-            (cdr ass) nil)
+            front (rest front)
+            (first ass) nil
+            (rest ass) nil)
       (decf count))))
 
 ;;;
-;;;    RING-BUFFER
+;;;    LINKED-RING-BUFFER
 ;;;    
-(defclass ring-buffer (linked-queue)
+(defclass linked-ring-buffer (linked-queue)
   ()
   (:documentation "Queue is a circular list. Ring grows as necessary."))
 
-(defmethod initialize-instance :after ((q ring-buffer) &rest initargs)
+(defmethod initialize-instance :after ((q linked-ring-buffer) &rest initargs)
   (declare (ignore initargs))
   (with-slots (front rear) q
     (setf front (make-list linked-queue-capacity)
           rear front
-          (cdr (last front)) front)))
+          (rest (last front)) front)))
 
 ;;;
 ;;;    Can't skip parent method to get to grandparent method?!?
 ;;;    
-(defmethod clear ((q ring-buffer))
+(defmethod clear ((q linked-ring-buffer))
   (loop until (emptyp q) do (dequeue q)))
 
-(defmethod enqueue ((q ring-buffer) obj)
+(defmethod resize ((q linked-ring-buffer))
   (with-slots (front rear count) q
-    (setf (car rear) obj)
-    (when (eq (cdr rear) front)
-      (setf (cdr rear) (nconc (make-list (1+ count)) front)))
-    (setf rear (cdr rear))
+    (assert (eq (rest rear) front) () "RESIZE called without full STORE.")
+    (setf (rest rear) (nconc (make-list (1+ count)) front))))
+
+(defmethod enqueue :before ((q linked-ring-buffer) obj)
+  (declare (ignore obj))
+  (with-slots (front rear) q
+    (when (eq (rest rear) front)
+      (resize q))))
+(defmethod enqueue ((q linked-ring-buffer) obj)
+  (with-slots (front rear count) q
+    (setf (first rear) obj
+          rear (rest rear))
     (incf count)))
 
-(defmethod dequeue ((q ring-buffer))
+(defmethod dequeue ((q linked-ring-buffer))
   (with-slots (front count) q
     (prog1 (front q)
-      (setf (car front) nil
-            front (cdr front))
+      (setf (first front) nil
+            front (rest front))
       (decf count))))
 
 ;;;

@@ -67,29 +67,30 @@
 ;;;
 ;;;    Ring buffer deque
 ;;;    
-(defclass array-deque (deque array-queue) ())
+;(defclass array-deque (deque array-queue) ())
+(defclass array-ring-buffer-deque (deque array-ring-buffer) ())
 
-(defun make-array-deque (&key (type t))
-  (make-instance 'array-deque :type type))
+(defun make-array-ring-buffer-deque (&key (type t))
+  (make-instance 'array-ring-buffer-deque :type type))
 
-(defmethod enqueue* :before ((dq array-deque) obj)
+(defmethod enqueue* :before ((dq array-ring-buffer-deque) obj)
   (declare (ignore obj))
   (with-slots (store count) dq
     (when (= count (length store))
       (resize dq))))
-(defmethod enqueue* ((dq array-deque) obj)
+(defmethod enqueue* ((dq array-ring-buffer-deque) obj)
   (with-slots (store front count) dq
     (setf front (offset dq -1)
           (aref store (offset dq 0)) obj)
     (incf count)))
 
-(defmethod dequeue* ((dq array-deque))
+(defmethod dequeue* ((dq array-ring-buffer-deque))
   (with-slots (store front count) dq
     (prog1 (rear dq)
       (setf (aref store (offset dq (1- count))) nil)
       (decf count))))
 
-(defmethod rear ((dq array-deque))
+(defmethod rear ((dq array-ring-buffer-deque))
   (with-slots (store count) dq
     (aref store (offset dq (1- count)))) )
 

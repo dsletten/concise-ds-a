@@ -240,9 +240,9 @@
                                   (format t "~A~%" test)
                                   (check (funcall test constructor)))) )))
 
-(deftest test-array-queue ()
+(deftest test-array-ring-buffer ()
   (check
-   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'array-queue :type type)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'array-ring-buffer :type type)))) )
 
 (deftest test-linked-queue ()
   (check
@@ -264,17 +264,17 @@
   (check
    (queue-test-suite #'(lambda (&key (type t)) (make-instance 'recycling-queue :type type)))) )
 
-(deftest test-ring-buffer ()
+(deftest test-linked-ring-buffer ()
   (check
-   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'ring-buffer :type type)))) )
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'linked-ring-buffer :type type)))) )
 
 (deftest test-hash-table-queue ()
   (check
    (queue-test-suite #'(lambda (&key (type t)) (make-instance 'hash-table-queue :type type)))) )
 
-(deftest test-array-deque ()
+(deftest test-array-ring-buffer-deque ()
   (check
-   (deque-test-suite #'make-array-deque)))
+   (deque-test-suite #'make-array-ring-buffer-deque)))
 
 (deftest test-array-list-deque ()
   (check
@@ -294,15 +294,15 @@
 
 (deftest test-queue-all ()
   (check
-   (test-array-queue)
+   (test-array-ring-buffer)
    (test-linked-queue)
    (test-array-list-queue)
    (test-linked-list-queue)
    (test-circular-queue)
    (test-recycling-queue)
-   (test-ring-buffer)
+   (test-linked-ring-buffer)
    (test-hash-table-queue)
-   (test-array-deque)
+   (test-array-ring-buffer-deque)
    (test-array-list-deque)
    (test-linked-list-deque)
    (test-dll-deque)

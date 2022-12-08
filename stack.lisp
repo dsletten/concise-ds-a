@@ -194,6 +194,9 @@
   ()
   (:documentation "A stack that defines non-destructive operations."))
 
+(defmethod clear ((s persistent-stack))
+  (make-empty-persistent-stack s))
+
 (defmethod fill ((stack persistent-stack) &key (count 1000) (generator #'identity))
   (loop for i from 1 to count
         for new-stack = (push stack (funcall generator i)) then (push new-stack (funcall generator i))   ; ??????? Scope problem without renaming?!??!
@@ -222,9 +225,6 @@
 (defmethod emptyp ((s persistent-linked-stack))
   (with-slots (top) s
     (null top)))
-
-(defmethod clear ((s persistent-linked-stack))
-  (make-empty-persistent-stack s))
 
 (flet ((initialize-stack (s top count)
          (let ((new-stack (make-empty-persistent-stack s)))
