@@ -125,6 +125,10 @@
 ;;         do (enqueue* deque i)
 ;;         finally (return deque)))
 
+(defmethod elements ((queue queue))
+  (loop until (emptyp queue)
+        collect (dequeue queue)))
+
 (defgeneric resize (queue)
   (:documentation "Resize the queue when it is full.")) ; Shrink??
 
@@ -486,6 +490,11 @@
 ;;   ;; (loop for i from 1 to count
 ;;   ;;       for new-queue = (enqueue queue i) then (enqueue new-queue i)   ; ??????? Scope problem without renaming?!??!
 ;;   ;;       finally (return new-queue)))
+
+(defmethod elements ((queue persistent-queue))
+  (loop for new-queue = queue then (dequeue new-queue)
+        until (emptyp new-queue)
+        collect (front new-queue)))
 
 (defgeneric make-empty-persistent-queue (q)
   (:documentation "Create an empty persistent queue of a given element type."))

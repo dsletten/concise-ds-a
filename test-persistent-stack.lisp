@@ -79,6 +79,13 @@
     (assert (zerop (size stack)) () "Size of stack should be 0."))
   t)
 
+(defun test-persistent-stack-elements (stack-constructor &optional (count 1000))
+  (let* ((stack (fill (funcall stack-constructor) :count count))
+         (expected (loop for i from count downto 1 collect i))
+         (elements (elements stack)))
+    (assert (equal expected elements) () "LIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+  t)
+    
 (defun test-persistent-stack-push (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (loop for i from 1 to count
@@ -118,6 +125,7 @@
                  test-persistent-stack-emptyp
                  test-persistent-stack-size
                  test-persistent-stack-clear
+                 test-persistent-stack-elements
                  test-persistent-stack-push
                  test-persistent-stack-push-wrong-type
                  test-persistent-stack-peek-pop

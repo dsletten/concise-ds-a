@@ -79,6 +79,10 @@
         do (push stack (funcall generator i))
         finally (return stack)))
 
+(defmethod elements ((stack stack))
+  (loop until (emptyp stack)
+        collect (pop stack)))
+
 ;;;
 ;;;    ARRAY-STACK
 ;;;    
@@ -201,6 +205,11 @@
   (loop for i from 1 to count
         for new-stack = (push stack (funcall generator i)) then (push new-stack (funcall generator i))   ; ??????? Scope problem without renaming?!??!
         finally (return new-stack)))
+
+(defmethod elements ((stack persistent-stack))
+  (loop for new-stack = stack then (pop new-stack)
+        until (emptyp new-stack)
+        collect (peek new-stack)))
 
 (defgeneric make-empty-persistent-stack (q)
   (:documentation "Create an empty persistent stack of a given element type."))

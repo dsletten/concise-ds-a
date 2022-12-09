@@ -75,6 +75,13 @@
     (assert (zerop (size list)) () "Size of empty list should be zero."))
   t)
 
+(defun test-list-elements (list-constructor &optional (count 1000))
+  (let* ((list (fill (funcall list-constructor) :count count))
+         (expected (loop for i from 1 to count collect i))
+         (elements (elements list)))
+    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+  t)
+    
 (defun test-list-contains (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 1 to count
@@ -502,6 +509,7 @@
                  test-list-emptyp
                  test-list-size 
                  test-list-clear
+                 test-list-elements
                  test-list-contains
                  test-list-contains-predicate
                  test-list-contains-arithmetic

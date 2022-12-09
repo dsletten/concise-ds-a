@@ -43,13 +43,13 @@
         (format t "Got expected error: ~A~%" e))
       (:no-error (obj)
         (declare (ignore obj))
-        (error "Can't call PEEK on empty stack.~%")))
+        (error "Can't call PEEK on empty stack.")))
     (handler-case (pop stack)
       (error (e)
         (format t "Got expected error: ~A~%" e))
       (:no-error (obj)
         (declare (ignore obj))
-        (error "Can't call POP on empty stack.~%")))
+        (error "Can't call POP on empty stack.")))
     t))
 
 (defun test-stack-emptyp (stack-constructor)
@@ -85,11 +85,18 @@
     (assert-stack-size stack 0)
     t))
 
+(defun test-stack-elements (stack-constructor &optional (count 1000))
+  (let* ((stack (fill (funcall stack-constructor) :count count))
+         (expected (loop for i from count downto 1 collect i))
+         (elements (elements stack)))
+    (assert (equal expected elements) () "LIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+  t)
+    
 (defun test-stack-push (stack-constructor &optional (count 1000))
   (let ((stack (funcall stack-constructor)))
     (loop for i from 1 to count
           do (push stack i)
-             (assert (= i (peek stack)) () "Wrong value pushed: ~A should be: ~A~%" (peek stack) i)))
+             (assert (= i (peek stack)) () "Wrong value pushed: ~A should be: ~A" (peek stack) i)))
   t)
 
 (defun test-stack-push-wrong-type (stack-constructor)
@@ -99,7 +106,7 @@
         (format t "Got expected error: ~A~%" e))
       (:no-error (obj)
         (declare (ignore obj))
-        (error "Can't PUSH value of wrong type onto stack.~%"))))
+        (error "Can't PUSH value of wrong type onto stack."))))
   t)
 
 (defun test-stack-peek-pop (stack-constructor &optional (count 1000))
@@ -107,7 +114,7 @@
     (loop repeat (size stack)
           for top = (peek stack)
           for popped = (pop stack)
-          do (assert (= top popped) () "Wrong value popped: ~A should be: ~A~%" popped top))
+          do (assert (= top popped) () "Wrong value popped: ~A should be: ~A" popped top))
     (assert (emptyp stack) () "Stack should be empty."))
   t)
 
@@ -149,6 +156,7 @@
                  test-stack-emptyp
                  test-stack-size
                  test-stack-clear
+                 test-stack-elements
                  test-stack-push
                  test-stack-push-wrong-type
                  test-stack-peek-pop

@@ -85,6 +85,12 @@
   (declare (ignore c count generator))
   (error "CONTAINER does not implement FILL"))
 
+(defgeneric elements (container)
+  (:documentation "Extract the elements of a container as a list."))
+(defmethod elements ((c container))
+  (declare (ignore c))
+  (error "CONTAINER does not implement ELEMENTS"))
+
 ;;;
 ;;;    DISPENSER
 ;;;    

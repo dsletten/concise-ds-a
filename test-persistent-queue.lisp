@@ -116,6 +116,13 @@
     (assert (not (emptyp queue)) () "Emptying queue should not break it."))
   t)
 
+(defun test-persistent-queue-elements (queue-constructor &optional (count 1000))
+  (let* ((queue (fill (funcall queue-constructor) :count count))
+         (expected (loop for i from 1 to count collect i))
+         (elements (elements queue)))
+    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+  t)
+    
 (defun test-persistent-queue-enqueue (queue-constructor &optional (count 1000))
   (let ((queue (funcall queue-constructor)))
     (loop for i from 1 to count
@@ -193,6 +200,7 @@
                  test-persistent-queue-emptyp
                  test-persistent-queue-size
                  test-persistent-queue-clear
+                 test-persistent-queue-elements
                  test-persistent-queue-enqueue
                  test-persistent-queue-enqueue-wrong-type
                  test-persistent-queue-front-dequeue

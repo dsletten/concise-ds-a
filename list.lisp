@@ -384,6 +384,12 @@
 (defmethod fill ((list list) &key (count 1000) (generator #'identity))
   (apply #'add list (loop for i from 1 to count collect (funcall generator i))))
 
+(defmethod elements ((list list))
+  (loop with i = (iterator list)
+        until (done i)
+        collect (current i)
+        do (next i)))
+
 ;;;
 ;;;    MUTABLE-LIST
 ;;;    - SETF NTH can change length of list, but that will increment COUNT-MODIFICATION via EXTEND-LIST -> ADD
@@ -2923,6 +2929,11 @@
 
 (defmethod clear ((l persistent-list))
   (make-persistent-list :type (type l) :fill-elt (fill-elt l)))
+
+(defmethod elements ((l persistent-list))
+  (loop for i = (iterator l) then (next i)
+        until (done i)
+        collect (current i)))
 
 (defun make-persistent-list-cursor (l)
   (make-instance 'cursor

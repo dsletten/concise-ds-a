@@ -113,6 +113,13 @@
     (assert (not (emptyp queue)) () "Emptying queue should not break it.")
     t))
 
+(defun test-queue-elements (queue-constructor &optional (count 1000))
+  (let* ((queue (fill (funcall queue-constructor) :count count))
+         (expected (loop for i from 1 to count collect i))
+         (elements (elements queue)))
+    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+  t)
+    
 ;;;
 ;;;    Not as straightforward as TEST-STACK-PUSH...
 ;;;    
@@ -215,6 +222,7 @@
                  test-queue-emptyp
                  test-queue-size
                  test-queue-clear
+                 test-queue-elements
                  test-queue-enqueue
                  test-queue-enqueue-wrong-type
                  test-queue-front-dequeue
