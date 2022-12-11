@@ -64,6 +64,36 @@
     (nth list 0)))
 
 ;;;
+;;;    ARRAY-LIST-STACK
+;;;
+(defclass array-list-stack (stack)
+  ((list :initform (make-array-list)))) ; FILL-ELT is never used!! Don't need ARRAY-LIST-X here.
+
+(defmethod size ((s array-list-stack))
+  (with-slots (list) s
+    (size list)))
+
+(defmethod emptyp ((s array-list-stack))
+  (with-slots (list) s
+    (emptyp list)))
+
+(defmethod clear ((s array-list-stack))
+  (with-slots (list) s
+    (clear list)))
+
+(defmethod push ((s array-list-stack) obj)
+  (with-slots (list) s
+    (add list obj)))
+
+(defmethod pop ((s array-list-stack))
+  (with-slots (list) s
+    (delete list -1)))
+
+(defmethod peek ((s array-list-stack))
+  (with-slots (list) s
+    (nth list -1)))
+
+;;;
 ;;;    PERSISTENT-LIST-STACK
 ;;;
 (let ((empty (make-persistent-list))) ; FILL-ELT is never used!!

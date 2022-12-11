@@ -176,6 +176,10 @@
   (check
    (stack-test-suite #'(lambda (&key (type t)) (make-instance 'linked-list-stack :type type)))) )
 
+(deftest test-array-list-stack ()
+  (check
+   (stack-test-suite #'(lambda (&key (type t)) (make-instance 'array-list-stack :type type)))) )
+
 (deftest test-array-stack ()
   (check
    (stack-test-suite #'(lambda (&key (type t)) (make-instance 'array-stack :type type)))) )
@@ -189,4 +193,5 @@
    (test-linked-stack)
    (test-linked-list-stack)
    (test-array-stack)
+   (test-array-list-stack)
    (test-hash-table-stack)))
