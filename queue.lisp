@@ -129,8 +129,16 @@
   (loop until (emptyp queue)
         collect (dequeue queue)))
 
-(defgeneric resize (queue)
+;;;
+;;;    RING-BUFFER
+;;;    
+(defclass ring-buffer (queue) ())
+
+(defgeneric resize (ring-buffer)
   (:documentation "Resize the queue when it is full.")) ; Shrink??
+(defmethod resize ((rb ring-buffer))
+  (declare (ignore rb))
+  (error "RING-BUFFER does not implement RESIZE"))
 
 ;;;
 ;;;    ARRAY-RING-BUFFER - Uses "circular" array. As long as there is room, queue can
@@ -141,7 +149,7 @@
 (defconstant array-ring-buffer-capacity 20)
 
 ;(defclass array-queue (queue)
-(defclass array-ring-buffer (queue)
+(defclass array-ring-buffer (ring-buffer)
   ((store)
    (front :initform 0) ; As long as queue is not empty FRONT is index of first queue elt.
    (count :initform 0)))
@@ -382,7 +390,7 @@
 ;;;
 ;;;    LINKED-RING-BUFFER
 ;;;    
-(defclass linked-ring-buffer (linked-queue)
+(defclass linked-ring-buffer (ring-buffer linked-queue)
   ()
   (:documentation "Queue is a circular list. Ring grows as necessary."))
 
