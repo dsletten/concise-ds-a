@@ -89,7 +89,8 @@
   (let* ((stack (fill (funcall stack-constructor) :count count))
          (expected (loop for i from count downto 1 collect i))
          (elements (elements stack)))
-    (assert (equal expected elements) () "LIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+    (assert (equal expected elements) () "LIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10))
+    (assert (emptyp stack) () "Mutable stack should be empty after elements are extracted."))
   t)
     
 (defun test-stack-push (stack-constructor &optional (count 1000))

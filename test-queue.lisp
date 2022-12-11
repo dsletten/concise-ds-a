@@ -117,7 +117,8 @@
   (let* ((queue (fill (funcall queue-constructor) :count count))
          (expected (loop for i from 1 to count collect i))
          (elements (elements queue)))
-    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10))
+    (assert (emptyp queue) () "Mutable queue should be empty after elements are extracted."))
   t)
     
 ;;;
@@ -264,6 +265,10 @@
   (check
    (queue-test-suite #'(lambda (&key (type t)) (make-instance 'linked-list-queue :type type)))) )
 
+(deftest test-dll-queue ()
+  (check
+   (queue-test-suite #'(lambda (&key (type t)) (make-instance 'dll-queue :type type)))) )
+
 (deftest test-circular-queue ()
   (check
    (queue-test-suite #'(lambda (&key (type t)) (make-instance 'circular-queue :type type)))) )
@@ -306,6 +311,7 @@
    (test-linked-queue)
    (test-array-list-queue)
    (test-linked-list-queue)
+   (test-dll-queue)
    (test-circular-queue)
    (test-recycling-queue)
    (test-linked-ring-buffer)

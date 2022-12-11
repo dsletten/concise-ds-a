@@ -389,6 +389,8 @@
         until (done i)
         collect (current i)
         do (next i)))
+(defmethod elements :after ((list list))
+  (clear list))
 
 ;;;
 ;;;    MUTABLE-LIST

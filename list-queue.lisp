@@ -81,6 +81,32 @@
     (nth list 0)))
 
 ;;;
+;;;    DLL-QUEUE
+;;;    
+(defclass dll-queue (queue)
+  ((list :initform (make-doubly-linked-list)))) ; FILL-ELT is never used!!
+
+(defmethod size ((q dll-queue))
+  (with-slots (list) q
+    (size list)))
+
+(defmethod clear ((q dll-queue))
+  (with-slots (list) q
+    (clear list)))
+
+(defmethod enqueue ((q dll-queue) obj)
+  (with-slots (list) q
+    (add list obj)))
+
+(defmethod dequeue ((q dll-queue))
+  (with-slots (list) q
+    (delete list 0)))
+
+(defmethod front ((q dll-queue))
+  (with-slots (list) q
+    (nth list 0)))
+
+;;;
 ;;;    PERSISTENT-LIST-QUEUE
 ;;;
 (let ((empty (make-persistent-list)))

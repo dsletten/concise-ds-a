@@ -58,7 +58,14 @@
     (loop for i from 1 to count
           do (add list i)
              (assert-list-size list i))
-    (loop for i from (1- count) downto 0 ; Same as TEST-LIST-DELETE
+    (loop for i from (1- count) downto 0
+          do (delete list -1)
+             (assert-list-size list i))
+    (assert (zerop (size list)) () "Size of empty list should be zero.")
+    (loop for i from 1 to count
+          do (insert list 0 i)
+             (assert-list-size list i))
+    (loop for i from (1- count) downto 0
           do (delete list 0)
              (assert-list-size list i))
     (assert (zerop (size list)) () "Size of empty list should be zero."))
@@ -79,7 +86,8 @@
   (let* ((list (fill (funcall list-constructor) :count count))
          (expected (loop for i from 1 to count collect i))
          (elements (elements list)))
-    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10)))
+    (assert (equal expected elements) () "FIFO elements should be ~A not ~A" (subseq expected 0 10) (subseq elements 0 10))
+    (assert (emptyp list) () "Mutable list should be empty after elements are extracted."))
   t)
     
 (defun test-list-contains (list-constructor &optional (count 1000))
@@ -241,11 +249,10 @@
 
 (defun test-list-delete (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
-    (loop for i from (1- count) downto 0
+    (loop repeat (size list)
           for expected = (nth list 0)
           for doomed = (delete list 0)
-          do (assert (= (size list) i) () "List size should reflect deletions")
-             (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected))
+          do (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected))
     (assert (emptyp list) () "Empty list should be empty."))
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from (1- count) downto 0
@@ -253,13 +260,11 @@
           for doomed = (delete list i)
           do (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected))
     (assert (emptyp list) () "Empty list should be empty."))
-  t)
-
-(defun test-list-delete-negative-index (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop repeat (size list)
           for expected = (nth list -1)
-          do (assert (= expected (delete list -1)) () "Deleted element should be last in list"))
+          for doomed = (delete list -1)
+          do (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected))
     (assert (emptyp list) () "Empty list should be empty."))
   t)
 
@@ -524,7 +529,6 @@
                  test-list-insert-end
                  test-list-insert-offset
                  test-list-delete
-                 test-list-delete-negative-index
                  test-list-delete-offset
                  test-list-delete-random
                  test-list-nth

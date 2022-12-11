@@ -65,7 +65,7 @@
   (error "DEQUE does not implement REAR"))
 
 ;;;
-;;;    Ring buffer deque
+;;;    ARRAY-RING-BUFFER-DEQUE
 ;;;    
 ;(defclass array-deque (deque array-queue) ())
 (defclass array-ring-buffer-deque (deque array-ring-buffer) ())
@@ -108,8 +108,7 @@
 
 (defmethod dequeue* ((dq array-list-deque))
   (with-slots (list) dq
-    (prog1 (rear dq)
-      (delete list -1))))
+    (delete list -1)))
 
 (defmethod rear ((dq array-list-deque))
   (with-slots (list) dq
@@ -138,35 +137,10 @@
 ;;;
 ;;;    Doubly-linked-list deque
 ;;;    
-(defclass dll-deque (deque)
-  ((list :initform (make-doubly-linked-list)))) ; FILL-ELT is irrelevant
-
-;; (defmethod initialize-instance :after ((dq dll-deque) &rest initargs)
-;;   (declare (ignore initargs))
-;;   (with-slots (type list) dq
-;;     (setf list (make-doubly-linked-list :type `(or null ,type)))) ) ; ?? FILL-ELT is never used!!
+(defclass dll-deque (deque dll-queue) ())
 
 (defun make-dll-deque (&key (type t))
   (make-instance 'dll-deque :type type))
-;  (make-instance 'dll-deque :type type :list (make-doubly-linked-list :type type))) ; ??
-;  (make-instance 'dll-deque :type type :list (make-doubly-linked-list))) ; ??
-
-(defmethod size ((dq dll-deque))
-  (with-slots (list) dq
-    (size list)))
-
-(defmethod clear ((dq dll-deque))
-  (with-slots (list) dq
-    (clear list)))
-
-(defmethod enqueue ((dq dll-deque) obj)
-  (with-slots (list) dq
-    (add list obj)))
-
-(defmethod dequeue ((dq dll-deque))
-  (with-slots (list) dq
-    (prog1 (front dq)
-      (delete list 0))))
 
 (defmethod enqueue* ((dq dll-deque) obj)
   (with-slots (list) dq
@@ -174,12 +148,7 @@
 
 (defmethod dequeue* ((dq dll-deque))
   (with-slots (list) dq
-    (prog1 (rear dq)
-      (delete list -1))))
-
-(defmethod front ((dq dll-deque))
-  (with-slots (list) dq
-    (nth list 0)))
+    (delete list -1)))
 
 (defmethod rear ((dq dll-deque))
   (with-slots (list) dq

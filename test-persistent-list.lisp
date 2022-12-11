@@ -62,10 +62,17 @@
     (loop for i from 1 to count
           do (setf list (add list i))
              (assert (= (size list) i) () "Size of list should be ~D." i))
-    (loop for i from (1- count) downto 0 ; Same as TEST-PERSISTENT-LIST-DELETE below
+    (loop for i from (1- count) downto 0
+          do (setf list (delete list -1))
+             (assert (= (size list) i) () "Size of list should be ~D." i))
+    (assert (zerop (size list)) () "Size of empty list should be zero.")
+    (loop for i from 1 to count
+          do (setf list (insert list 0 i))
+             (assert (= (size list) i) () "Size of list should be ~D." i))
+    (loop for i from (1- count) downto 0
           do (setf list (delete list 0))
              (assert (= (size list) i) () "Size of list should be ~D." i))
-    (assert (zerop (size list)) () "Size of new list should be zero."))
+    (assert (zerop (size list)) () "Size of empty list should be zero."))
   t)
 
 (defun test-persistent-list-clear (list-constructor &optional (count 1000))
@@ -171,9 +178,10 @@ t)
   t)
 
 (defun test-persistent-list-add (list-constructor &optional (count 1000))
-  (loop for i from 1 to count
-        for list = (add (funcall list-constructor) i) then (add list i)
-        do (assert (= (size list) i) () "Size of list should be ~D not ~D" i (size list))
+  (loop with list = (funcall list-constructor)
+        for i from 1 to count
+        do (setf list (add list i))
+           (assert (= (size list) i) () "Size of list should be ~D not ~D" i (size list))
            (assert (= (nth list -1) i) () "Last element of list should be ~D not ~D" i (nth list -1)))
   t)
 
@@ -244,11 +252,10 @@ t)
 
 (defun test-persistent-list-delete (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
-    (loop for i from (1- count) downto 0
+    (loop repeat (size list)
           for expected = (nth list 0)
           do (multiple-value-bind (l doomed) (delete list 0)
                (setf list l)
-               (assert (= (size list) i) () "List size should reflect deletions")
                (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected)))
     (assert (emptyp list) () "Empty list should be empty."))
   (let ((list (fill (funcall list-constructor) :count count)))
@@ -258,15 +265,12 @@ t)
                (setf list l)
                (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected)))
     (assert (emptyp list) () "Empty list should be empty."))
-  t)
-
-(defun test-persistent-list-delete-negative-index (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
-    (loop for i from count downto 1
+    (loop repeat (size list)
           for expected = (nth list -1)
           do (multiple-value-bind (l doomed) (delete list -1)
                (setf list l)
-               (assert (= expected doomed) () "Deleted element should be last in list")))
+               (assert (= expected doomed) () "Incorrect deleted value returned: ~D rather than ~D" doomed expected)))
     (assert (emptyp list) () "Empty list should be empty."))
   t)
 
@@ -457,7 +461,6 @@ t)
                  test-persistent-list-insert-end
 ;;                 test-persistent-list-insert-offset
                  test-persistent-list-delete
-                 test-persistent-list-delete-negative-index
 ;;                 test-persistent-list-delete-offset
                  test-persistent-list-delete-random
                  test-persistent-list-nth
