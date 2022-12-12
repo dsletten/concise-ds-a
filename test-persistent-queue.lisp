@@ -92,7 +92,8 @@
              (assert (= (size queue) i) () "Size of queue should be ~D." i))
     (loop for i from (1- count) downto 0
           do (setf queue (dequeue queue))
-             (assert (= (size queue) i) () "Size of queue should be ~D." i)))
+             (assert (= (size queue) i) () "Size of queue should be ~D." i))
+    (assert (emptyp queue) () "Empty queue should be empty."))
   t)
 
 (defun test-persistent-deque-size (deque-constructor &optional (count 1000))
@@ -103,7 +104,8 @@
              (assert (= (size deque) i) () "Size of deque should be ~D." i))
     (loop for i from (1- count) downto 0
           do (setf deque (dequeue* deque))
-             (assert (= (size deque) i) () "Size of deque should be ~D." i)))
+             (assert (= (size deque) i) () "Size of deque should be ~D." i))
+    (assert (emptyp deque) () "Empty deque should be empty."))
   t)
 
 (defun test-persistent-queue-clear (queue-constructor &optional (count 1000))

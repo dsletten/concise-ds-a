@@ -111,9 +111,6 @@
   (with-slots (list) s
     (emptyp list)))
 
-(defmethod clear ((s persistent-list-stack))
-  (make-empty-persistent-stack s))
-
 (flet ((initialize-stack (s list)
          (let ((new-stack (make-empty-persistent-stack s)))
            (with-slots ((new-list list)) new-stack

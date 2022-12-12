@@ -49,6 +49,7 @@
 ;;;;             |        |        |                 |
 ;;;;             v        v        v                 v
 ;;;;             8        9        10               NIL
+;;;;         After
 ;;;;         #1=[*|*]--->[*|*]---> ... --->[*|*]--->[*|*]--->#1#
 ;;;;             |        |                 |        |
 ;;;;             v        v                 v        v
@@ -63,6 +64,8 @@
 ;;;;    ENQUEUE is way too inefficient. 见 test cases.
 ;;;;
 ;;;;    DEQUE inherits QUEUE error messages?!
+;;;;
+;;;;    Have to worry about which primary method is inherited with multiple inheritance?
 ;;;;
 
 
@@ -277,7 +280,7 @@
   (with-slots (front rear count) q
     (let ((node (cl:list obj)))
       (cond ((emptyp q)
-             (assert (null rear))
+             (assert (null rear) () "Queue is in illegal state")
              (setf rear (setf front node)))
             (t (setf rear (setf (rest rear) node)))) )
     (incf count)))
@@ -338,6 +341,8 @@
 ;;;
 ;;;    RECYCLING-QUEUE
 ;;;    - A linked queue that recycles CONS cells after DEQUEUEing to mimimize creating garbage.
+;;;    - This is an odd beast. It has a RESIZE method, but it isn't a ring buffer. It probably
+;;;      shouldn't be a subclass of LINKED-QUEUE either since it has a predetermined size?
 ;;;    
 (defconstant linked-queue-capacity 20)
 
@@ -357,26 +362,24 @@
 (defmethod clear ((q recycling-queue))
   (loop until (emptyp q) do (dequeue q)))
 
+(defmethod resize ((q recycling-queue)) ; Not really a RING-BUFFER...
+  (with-slots (rear ass count) q
+    (assert (eq rear ass) () "RESIZE called without full STORE.")
+    (let ((more (make-list (1+ count))))
+      (setf (rest ass) more
+            ass (last more)))) )
+
+(defmethod enqueue :before ((q recycling-queue) obj)
+  (declare (ignore obj))
+  (with-slots (rear ass) q
+    (when (eq rear ass)
+      (resize q))))
 (defmethod enqueue ((q recycling-queue) obj)
   (with-slots (rear ass count) q
-    (setf (first rear) obj)
-    (when (eq rear ass)
-      (let ((more (make-list (1+ count))))
-        (setf (rest ass) more
-              ass (last more))))
-    (setf rear (rest rear))
+    (setf (first rear) obj
+          rear (rest rear))
     (incf count)))
 
-;; (defmethod dequeue ((q recycling-queue))
-;;   (with-slots (front rear ass count) q
-;;     (prog1 (front q)
-;;       (let ((next (cdr front)))
-;;         (setf (cdr front) nil
-;;               (car front) nil
-;;               (cdr ass) front
-;;               ass front
-;;               front next))
-;;       (decf count))))
 (defmethod dequeue ((q recycling-queue))
   (with-slots (front ass count) q
     (prog1 (front q)

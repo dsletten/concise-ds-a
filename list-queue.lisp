@@ -29,6 +29,7 @@
 
 ;;;
 ;;;    ARRAY-LIST-QUEUE
+;;;    - Queue contents drift incessantly towards end of array...
 ;;;    
 (defclass array-list-queue (queue)
   ((list :initform (make-array-list-x)))) ; FILL-ELT is never used!!

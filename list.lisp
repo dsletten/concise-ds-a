@@ -572,14 +572,12 @@
 
 (defgeneric shift-up (list low &optional high)
   (:documentation "Shift elements in the list up starting from LOW."))
-
-(defgeneric shift-down (list low &optional high)
-  (:documentation "Shift elements in the list down starting from LOW."))
-
 (defmethod shift-up ((l array-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
     (setf (subseq store (1+ low)) (subseq store low high))))
     
+(defgeneric shift-down (list low &optional high)
+  (:documentation "Shift elements in the list down starting from LOW."))
 (defmethod shift-down ((l array-list) (low integer) &optional (high (size l)))
   (with-slots (store) l
     (setf (subseq store (1- low)) (subseq store low high))))

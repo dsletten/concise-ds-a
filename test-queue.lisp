@@ -89,8 +89,12 @@
     (assert (zerop (size queue)) () "Size of new queue should be zero.")
     (loop for i from 1 to count
           do (enqueue queue i)
-             (assert-queue-size queue i)
-          finally (return t))))
+             (assert-queue-size queue i))
+    (loop for i from (1- count) downto 0
+          do (dequeue queue)
+             (assert-queue-size queue i))
+    (assert (emptyp queue) () "Queue should be empty."))
+  t)
 
 (defun assert-queue-size (queue n)
   (assert (= (size queue) n) () "Size of queue should be ~D." n))
@@ -100,8 +104,12 @@
     (assert (zerop (size deque)) () "Size of new deque should be zero.")
     (loop for i from 1 to count
           do (enqueue* deque i)
-             (assert-queue-size deque i)
-          finally (return t))))
+             (assert-queue-size deque i))
+    (loop for i from (1- count) downto 0
+          do (dequeue* deque)
+             (assert-queue-size deque i))
+    (assert (emptyp deque) () "Deque should be empty."))
+  t)
 
 (defun test-queue-clear (queue-constructor &optional (count 1000))
   (let ((queue (fill (funcall queue-constructor) :count count)))
