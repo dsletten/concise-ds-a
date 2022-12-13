@@ -137,8 +137,23 @@
 ;;;    
 (defclass ring-buffer (queue) ())
 
+(defmethod enqueue :before ((rb ring-buffer) obj)
+  (declare (ignore obj))
+  (when (fullp rb)
+    (resize rb)))
+
+(defgeneric fullp (ring-buffer)
+  (:documentation "Is this ring buffer full?"))
+(defmethod fullp ((rb ring-buffer))
+  (declare (ignore rb))
+  (error "RING-BUFFER does not implement FULLP"))
+
 (defgeneric resize (ring-buffer)
   (:documentation "Resize the queue when it is full.")) ; Shrink??
+(defmethod resize :around ((rb ring-buffer))
+  (if (fullp rb)
+      (call-next-method)
+      (error "RESIZE called without full buffer.")))
 (defmethod resize ((rb ring-buffer))
   (declare (ignore rb))
   (error "RING-BUFFER does not implement RESIZE"))
@@ -227,20 +242,18 @@
   (with-slots (store front) q
     (mod (+ front i) (length store))))
 
+(defmethod fullp ((q array-ring-buffer))
+  (with-slots (store count) q
+    (= count (length store))))
+  
 (defmethod resize ((q array-ring-buffer))
   (with-slots (front store count) q
-    (assert (= count (length store)) () "RESIZE called without full STORE.")
     (let ((new-store (make-array (* 2 count) :element-type (type q))))
       (dotimes (i count)
         (setf (aref new-store i) (aref store (offset q i))))
       (setf store new-store
             front 0))))
 
-(defmethod enqueue :before ((q array-ring-buffer) obj)
-  (declare (ignore obj))
-  (with-slots (store count) q
-    (when (= count (length store))
-      (resize q))))
 (defmethod enqueue ((q array-ring-buffer) obj)
   (with-slots (store count) q
     (setf (aref store (offset q count)) obj)
@@ -346,7 +359,7 @@
 ;;;    
 (defconstant linked-queue-capacity 20)
 
-(defclass recycling-queue (linked-queue)
+(defclass recycling-queue (ring-buffer linked-queue) ; Not really a RING-BUFFER...but aux methods are needed.
   ((ass)))
 
 (defmethod initialize-instance :after ((q recycling-queue) &rest initargs)
@@ -362,18 +375,16 @@
 (defmethod clear ((q recycling-queue))
   (loop until (emptyp q) do (dequeue q)))
 
-(defmethod resize ((q recycling-queue)) ; Not really a RING-BUFFER...
+(defmethod fullp ((q recycling-queue))
+  (with-slots (rear ass) q
+    (eq rear ass)))
+
+(defmethod resize ((q recycling-queue))
   (with-slots (rear ass count) q
-    (assert (eq rear ass) () "RESIZE called without full STORE.")
     (let ((more (make-list (1+ count))))
       (setf (rest ass) more
             ass (last more)))) )
 
-(defmethod enqueue :before ((q recycling-queue) obj)
-  (declare (ignore obj))
-  (with-slots (rear ass) q
-    (when (eq rear ass)
-      (resize q))))
 (defmethod enqueue ((q recycling-queue) obj)
   (with-slots (rear ass count) q
     (setf (first rear) obj
@@ -410,16 +421,14 @@
 (defmethod clear ((q linked-ring-buffer))
   (loop until (emptyp q) do (dequeue q)))
 
+(defmethod fullp ((q linked-ring-buffer))
+  (with-slots (rear front) q
+    (eq (rest rear) front)))
+
 (defmethod resize ((q linked-ring-buffer))
   (with-slots (front rear count) q
-    (assert (eq (rest rear) front) () "RESIZE called without full STORE.")
     (setf (rest rear) (nconc (make-list (1+ count)) front))))
 
-(defmethod enqueue :before ((q linked-ring-buffer) obj)
-  (declare (ignore obj))
-  (with-slots (front rear) q
-    (when (eq (rest rear) front)
-      (resize q))))
 (defmethod enqueue ((q linked-ring-buffer) obj)
   (with-slots (front rear count) q
     (setf (first rear) obj
