@@ -488,6 +488,19 @@
   ()
   (:documentation "A queue that defines non-destructive operations."))
 
+(defgeneric make-empty-persistent-queue (q)
+  (:documentation "Create an empty persistent queue of a given element type."))
+(defmethod make-empty-persistent-queue ((q persistent-queue))
+  (declare (ignore q))
+  (error "PERSISTENT-QUEUE does not implement MAKE-EMPTY-PERSISTENT-QUEUE"))
+
+;;;
+;;;    This changes signature of CONTAINER?
+;;;    
+(defmethod clear :around ((q persistent-queue))
+  (if (emptyp q)
+      q
+      (call-next-method)))
 (defmethod clear ((q persistent-queue))
   (make-empty-persistent-queue q))
 
@@ -515,12 +528,6 @@
   (loop for new-queue = queue then (dequeue new-queue)
         until (emptyp new-queue)
         collect (front new-queue)))
-
-(defgeneric make-empty-persistent-queue (q)
-  (:documentation "Create an empty persistent queue of a given element type."))
-(defmethod make-empty-persistent-queue ((q persistent-queue))
-  (declare (ignore q))
-  (error "PERSISTENT-QUEUE does not implement MAKE-EMPTY-PERSISTENT-QUEUE"))
 
 ;;;
 ;;;    PERSISTENT-LINKED-QUEUE

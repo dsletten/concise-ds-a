@@ -198,6 +198,13 @@
   ()
   (:documentation "A stack that defines non-destructive operations."))
 
+;;;
+;;;    This changes signature of CONTAINER?
+;;;    
+(defmethod clear :around ((s persistent-stack))
+  (if (emptyp s)
+      s
+      (call-next-method)))
 (defmethod clear ((s persistent-stack))
   (make-empty-persistent-stack s))
 
@@ -211,10 +218,10 @@
         until (emptyp new-stack)
         collect (peek new-stack)))
 
-(defgeneric make-empty-persistent-stack (q)
+(defgeneric make-empty-persistent-stack (s)
   (:documentation "Create an empty persistent stack of a given element type."))
-(defmethod make-empty-persistent-stack ((q persistent-stack))
-  (declare (ignore q))
+(defmethod make-empty-persistent-stack ((s persistent-stack))
+  (declare (ignore s))
   (error "PERSISTENT-STACK does not implement MAKE-EMPTY-PERSISTENT-STACK"))
 
 ;;;
@@ -224,8 +231,8 @@
   ((top :initform '())
    (count :initform 0 :type integer)))
 
-(defmethod make-empty-persistent-stack ((q persistent-linked-stack))
-  (make-instance 'persistent-linked-stack :type (type q)))
+(defmethod make-empty-persistent-stack ((s persistent-linked-stack))
+  (make-instance 'persistent-linked-stack :type (type s)))
 
 (defmethod size ((s persistent-linked-stack))
   (with-slots (count) s

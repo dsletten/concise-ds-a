@@ -1,5 +1,3 @@
-;#!/usr/local/bin/sbcl --script
-
 ;;;;   Hey, Emacs, this is a -*- Mode: Lisp; Syntax: Common-Lisp -*- file!
 ;;;;
 ;;;;   Programming should be fun. Programs should be beautiful.
@@ -72,11 +70,14 @@
   t)
 
 (defun test-persistent-stack-clear (stack-constructor &optional (count 1000))
-  (let ((stack (fill (funcall stack-constructor) :count count)))
-    (assert (not (emptyp stack)) () "Stack should have ~D elements." count)
-    (setf stack (clear stack))
-    (assert (emptyp stack) () "Stack should be empty.")
-    (assert (zerop (size stack)) () "Size of stack should be 0."))
+  (let ((original-stack (fill (funcall stack-constructor) :count count)))
+    (assert (not (emptyp original-stack)) () "Stack should have ~D elements." count)
+    (let ((stack (clear original-stack)))
+      (assert (emptyp stack) () "Stack should be empty.")
+      (assert (not (emptyp original-stack)) () "Original stack is unaffected.")
+      (assert (not (eq stack original-stack)) () "Cleared stack is new stack.")
+      (assert (zerop (size stack)) () "Size of empty stack should be 0.")
+      (assert (eq stack (clear stack)) () "Clearing empty stack has no effect.")))
   t)
 
 (defun test-persistent-stack-elements (stack-constructor &optional (count 1000))

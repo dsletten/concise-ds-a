@@ -2934,7 +2934,7 @@
       l
       (call-next-method)))
 (defmethod clear ((l persistent-list))
-  (make-persistent-list :type (type l) :fill-elt (fill-elt l)))
+  (make-empty-list l))
 
 (defmethod elements ((l persistent-list))
   (loop for i = (iterator l) then (next i)
