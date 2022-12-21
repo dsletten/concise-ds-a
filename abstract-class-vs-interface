@@ -1,0 +1,53 @@
+:AROUND methods
+
+Abstract class
+E.g., Stack pop()
+
+pop() enforces check of isEmpty()
+-- `final` method. Subclass cannot remove the restriction
+    public final E pop() {
+        if ( isEmpty() ) {
+            throw new EmptyStackException();
+        } else {
+            return doPop();
+        }
+    }
+
+-- "Primary" method is protected. Can't be called directly by client
+    protected abstract E doPop();
+
+
+
+Interface
+-- `default` method may be circumvented. Can't be `final`!
+    default E pop() {
+        if ( isEmpty() ) {
+            throw new EmptyStackException();
+        } else {
+            return doPop();
+        }
+    }
+
+-- "Primary" method is necessarily public!
+    E doPop();
+
+
+The `final` guarantee is not such a big deal? No other language besides CLOS has a similar feature
+(Can't circumvent :AROUND method).
+
+Maybe interface shouldn't be imposing such demands anyway? Leave to abstract class?
+But this is tedious and messes up using interfaces as mixins...
+
+List is a good example. Abstract method declarations on the List interface cannot enforce allowing
+negative indexes despite an interface supposedly being a "contract"!
+
+The alternative is a non-final `default` method that forces the "primary" method to be `public`.
+
+Choices
+I. No interface. Abstract parent class can enforce behavior with `final` :AROUND methods, `protected`
+   "primary" methods. Drawback: single-inheritance -> can't mixin  [Stack]
+II. Interface. Enforces behaviour with non-final `default` :AROUND methods. "Primary" methods must then
+    be `public`! Can be used as mixin. [Queue/Deque]
+III. Hybrid. Interface simply declares abstract methods, relies on abstract class to implement interface,
+     which implements `final` :AROUND method, hides "primary" methods. Still can't mixin! [List]
+     

@@ -74,7 +74,10 @@
   (error "CONTAINER does not implement EMPTYP"))
 
 (defgeneric clear (container)
-  (:documentation "Remove all elements from the container"))
+  (:documentation "Remove all elements from the container. No effect if already empty."))
+(defmethod clear :around ((c container))
+  (unless (emptyp c)
+    (call-next-method)))
 (defmethod clear ((c container))
   (declare (ignore c))
   (error "CONTAINER does not implement CLEAR"))

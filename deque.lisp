@@ -65,19 +65,24 @@
   (error "DEQUE does not implement REAR"))
 
 ;;;
+;;;    RING-BUFFER-DEQUE
+;;;    
+(defclass ring-buffer-deque (ring-buffer deque) ())
+
+(defmethod enqueue* :before ((rb ring-buffer-deque) obj)
+  (declare (ignore obj))
+  (when (fullp rb)
+    (resize rb)))
+
+;;;
 ;;;    ARRAY-RING-BUFFER-DEQUE
 ;;;    
 ;(defclass array-deque (deque array-queue) ())
-(defclass array-ring-buffer-deque (deque array-ring-buffer) ())
+(defclass array-ring-buffer-deque (ring-buffer-deque array-ring-buffer) ())
 
 (defun make-array-ring-buffer-deque (&key (type t))
   (make-instance 'array-ring-buffer-deque :type type))
 
-(defmethod enqueue* :before ((dq array-ring-buffer-deque) obj)
-  (declare (ignore obj))
-  (with-slots (store count) dq
-    (when (= count (length store))
-      (resize dq))))
 (defmethod enqueue* ((dq array-ring-buffer-deque) obj)
   (with-slots (store front count) dq
     (setf front (offset dq -1)

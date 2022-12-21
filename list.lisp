@@ -85,8 +85,7 @@
 (defgeneric splice-after (node obj)
   (:documentation "Splice OBJ into chain of nodes after NODE."))
 (defmethod splice-after ((node cons) obj)
-  (let ((tail (cons obj (rest node))))
-    (setf (rest node) tail)))
+  (setf (rest node) (cons obj (rest node))))
 
 (defgeneric excise-node (doomed)
   (:documentation "Surgically remove the doomed node from the list."))
@@ -198,8 +197,7 @@
   (:documentation "Add the objects to the end of the list."))
 (defmethod add :around ((l list) &rest objs)
   (cond ((null objs) l)
-        ((every #'(lambda (obj) (typep obj (type l))) objs)
-         (call-next-method))
+        ((every #'(lambda (obj) (typep obj (type l))) objs) (call-next-method))
         (t (error "Type mismatch with OBJS"))))
 (defmethod add ((l list) &rest objs)
   (declare (ignore l objs))
@@ -272,6 +270,7 @@
 
 ;;;
 ;;;    Should return FILL-ELT rather than NIL?
+;;;    Identical logic to DELETE otherwise.
 ;;;    
 (defgeneric nth (list i)
   (:documentation "Retrieve the object at the given index."))
@@ -2927,6 +2926,13 @@
 (defmethod emptyp ((l persistent-list))
   (null (slot-value l 'store)))
 
+;;;
+;;;    This changes signature of CONTAINER?
+;;;    
+(defmethod clear :around ((l persistent-list))
+  (if (emptyp l)
+      l
+      (call-next-method)))
 (defmethod clear ((l persistent-list))
   (make-persistent-list :type (type l) :fill-elt (fill-elt l)))
 

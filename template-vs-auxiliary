@@ -1,4 +1,4 @@
-Template method design pattern vs. Auxiliary methods 220416
+Template method design pattern vs. CLOS Auxiliary methods 220416
 
 - Not equivalent in the end
 - Template method -> Hollywood Principle
@@ -29,7 +29,7 @@ Simple case-- Single :AROUND method
 - Possible to use Template method in CLOS but some of the guarantees are lost?
 
 Calling (push s o) triggers STACK :AROUND method, then LINKED-STACK primary PUSH is called.
-(No CALL-NEXT-METHOD - STACK primary method ignore.)
+(No CALL-NEXT-METHOD - STACK primary method ignored.)
 
 (defmethod push :around ((s stack) obj)
   (if (typep obj (type s))
@@ -103,6 +103,15 @@ More complicated:
     (dolist (obj objs l)
       (vector-push-extend obj store))))
 
+[Later modified - only 1 :AROUND method now
+(defgeneric add (list &rest objs)
+  (:documentation "Add the objects to the end of the list."))
+(defmethod add :around ((l list) &rest objs)
+  (cond ((null objs) l)
+        ((every #'(lambda (obj) (typep obj (type l))) objs)
+         (call-next-method))
+        (t (error "Type mismatch with OBJS"))))
+]
 
   class List < Collection
     def add(*objs)
