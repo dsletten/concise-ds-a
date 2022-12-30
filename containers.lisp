@@ -38,7 +38,7 @@
 
 (defpackage :containers 
   (:use :common-lisp :lang)
-  (:export :container :type :size :emptyp :clear
+  (:export :container :type :size :emptyp :clear :elements
            :dispenser
            :stack :push :pop :peek
            :array-stack :linked-stack :hash-table-stack :persistent-stack
@@ -46,11 +46,11 @@
            :array-queue :linked-queue :recycling-queue :ring-buffer :hash-table-queue :persistent-queue
            :collection :contains :equals :each
            :iterator :current :next :done
-           :list :fill-elt :add :insert :delete :nth :index :reverse :slice
+           :list :fill-elt :add :append :insert :delete :nth :index :reverse :slice
            :array-list :singly-linked-list :doubly-linked-list :hash-table-list :persistent-list
            :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear
            :list-iterator :remove :current-index :has-next :has-previous)
-  (:shadow :type :emptyp :push :pop :list :nth :delete :remove :fill :reverse))
+  (:shadow :type :emptyp :push :pop :list :nth :delete :remove :fill :reverse :append))
 
 (in-package :containers)
 
@@ -120,7 +120,7 @@
   (declare (ignore test))
   (if (typep obj (type c))
       (call-next-method)
-      (error "~A is not of type ~A" obj (type c))))
+      (error "~S is not of type ~S" obj (type c))))
 (defmethod contains ((c collection) obj &key (test #'eql)) ; Check time efficiency
   (do ((iterator (iterator c)))
       ((done iterator) nil)

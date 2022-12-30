@@ -21,7 +21,8 @@
 ;;;;
 ;;;;   Example:
 ;;;;
-;;;;   Notes:
+;;;;   Notes: This is somewhat redundant. All lists that are not persistent are mutable, so these
+;;;;   could be integrated with test-list.lisp?
 ;;;;
 ;;;;
 (load "/home/slytobias/lisp/packages/test.lisp")
@@ -60,9 +61,8 @@
   t)
 
 (defun test-mutable-list-delete (list-constructor)
-  (let ((list (funcall list-constructor)))
+  (let ((list (fill (funcall list-constructor) :count 20)))
     (with-slots (modification-count) list
-      (fill list :count 20)
       (delete list 0)
       (assert (= 2 modification-count) () "Deleting from filled list modifies it twice")
       (delete list -1)
@@ -81,6 +81,14 @@
                          collect (progn
                                   (format t "~A~%" test)
                                   (check (funcall test constructor)))) )))
+
+(deftest test-mutable-array-list ()
+  (check
+   (mutable-list-test-suite #'(lambda () (make-instance 'array-list)))) )
+
+(deftest test-mutable-array-list-x ()
+  (check
+   (mutable-list-test-suite #'(lambda () (make-instance 'array-list-x)))) )
 
 (deftest test-mutable-singly-linked-list ()
   (check
@@ -102,13 +110,30 @@
   (check
    (mutable-list-test-suite #'(lambda () (make-instance 'doubly-linked-list-hash-table)))) )
 
+(deftest test-mutable-hash-table-list ()
+  (check
+   (mutable-list-test-suite #'(lambda () (make-instance 'hash-table-list)))) )
+
+(deftest test-mutable-hash-table-list-x ()
+  (check
+   (mutable-list-test-suite #'(lambda () (make-instance 'hash-table-list-x)))) )
+
+(deftest test-mutable-hash-table-list-z ()
+  (check
+   (mutable-list-test-suite #'(lambda () (make-instance 'hash-table-list-z)))) )
+
 (deftest test-mutable-list-all ()
   (check
+   (test-mutable-array-list)
+   (test-mutable-array-list-x)
    (test-mutable-singly-linked-list)
    (test-mutable-singly-linked-list-x)
    (test-mutable-doubly-linked-list)
    (test-mutable-doubly-linked-list-ratchet)
-   (test-mutable-doubly-linked-list-hash-table)))
+   (test-mutable-doubly-linked-list-hash-table)
+   (test-mutable-hash-table-list)
+   (test-mutable-hash-table-list-x)
+   (test-mutable-hash-table-list-z)))
 
       
       

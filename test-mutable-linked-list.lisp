@@ -105,7 +105,7 @@
            (child (funcall next-node list start))
            (grand-child (funcall next-node list child)))
       (delete-node list grand-child)
-      (assert (= 4 (nth list 2)) () "Element after child should be 3")))
+      (assert (= 4 (nth list 2)) () "Element after child should be 4")))
   t)
 
 (defun test-mutable-linked-list-delete-child (list-constructor get-node next-node)
@@ -126,7 +126,7 @@
     (let* ((start (funcall get-node list))
            (child (funcall next-node list start)))
       (delete-child list child)
-      (assert (= 4 (nth list 2)) () "Element after child should be 3")))
+      (assert (= 4 (nth list 2)) () "Element after child should be 4")))
   t)
 
 (deftest mutable-linked-list-test-suite (constructor get-node next-node)

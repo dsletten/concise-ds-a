@@ -99,6 +99,16 @@ t)
           do (assert (= (contains list i) i) () "The list should contain the value ~D" i)))
   t)
 
+(defun test-persistent-list-contains-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (contains list :foo)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "List can't CONTAIN value of wrong type."))))
+  t)
+
 (defun test-persistent-list-contains-predicate (list-constructor)
   (let ((list (apply #'add (funcall list-constructor) #[#\a #\z])))
     (assert (every #'(lambda (ch) (contains list ch)) #[#\a #\z])
@@ -188,6 +198,30 @@ t)
            (assert (= (nth list -1) i) () "Last element of list should be ~D not ~D" i (nth list -1)))
   t)
 
+(defun test-persistent-list-add-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (add list 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ADD value of wrong type to list."))))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (add list 1 2 :k)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ADD value of wrong type to list."))))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (add list 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ADD value of wrong type to list."))))
+  t)
+
 (defun test-persistent-list-insert (list-constructor &key (fill-elt nil))
   (let ((list (funcall list-constructor :fill-elt fill-elt))
         (count 6)
@@ -204,6 +238,23 @@ t)
 
 (defun test-persistent-list-insert-fill-zero (list-constructor)
   (test-persistent-list-insert list-constructor :fill-elt 0))
+
+(defun test-persistent-list-insert-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (insert list 0 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't INSERT value of wrong type into empty list."))))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (insert list 0 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't INSERT value of wrong type into filled list."))))
+  t)
 
 (defun test-persistent-list-insert-negative-index (list-constructor)
   (let ((list (add (funcall list-constructor) 0)))
@@ -310,6 +361,23 @@ t)
           do (assert (= (nth list i) i) () "Element ~D should have value ~D not ~D" i i (nth list i))))
   t)
 
+(defun test-persistent-list-setf-nth-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (setf (nth list 0) 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't SETF value of wrong type in list."))))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (setf (nth list 0) 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't SETF value of wrong type in list."))))
+  t)
+
 (defun test-persistent-list-setf-nth-negative-index (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from -1 downto (- count)
@@ -332,6 +400,16 @@ t)
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 1 to count
           do (assert (= (index list i) (1- i)) () "The value ~D should be located at index ~D" (1- i) i)))
+  t)
+
+(defun test-persistent-list-index-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (index list :foo)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Value of wrong type does not exist at any INDEX."))))
   t)
 
 (defun test-persistent-list-index-predicate (list-constructor)
@@ -396,6 +474,44 @@ t)
     (assert (equals original forward) () "Reversed reversed list should be: ~A instead of: ~A~%" (slice original 0 20) (slice forward 0 20)))
   t)
 
+(defun test-persistent-list-append (list-constructor &optional (count 1000))
+  (let* ((list-1 (fill (funcall list-constructor) :count count))
+         (list-2 (fill (funcall list-constructor :type 'real :fill-elt 0) :count count :generator #'(lambda (x) (coerce x 'double-float))))
+         (list-3 (append list-1 list-2))
+         (list-4 (append list-2 list-1))
+         (list-x (funcall list-constructor)))
+    (assert (eq (type list-1) (type list-3)) () "Type of result list should be ~S not ~S" (type list-1) (type list-2))
+    (assert (eq (type list-2) (type list-4)) () "Type of result list should be ~S not ~S" (type list-2) (type list-4))
+    (assert (= (size list-3) (size list-4) (+ (size list-1) (size list-2))) () "Result list should have same size as sum of input sizes")
+    (assert (equals list-1 (slice list-3 0 count)) () "Front of LIST-3 should match LIST-1")
+    (assert (equals list-2 (slice list-4 0 count)) () "Front of LIST-4 should match LIST-2")
+    (assert (equals list-2 (slice list-3 count count)) () "Rear of LIST-3 should match LIST-2")
+    (assert (equals list-1 (slice list-4 count count)) () "Rear of LIST-4 should match LIST-1")
+    (assert (equals list-1 (append list-1 list-x)) () "Appending empty list yields equal list")
+    (assert (equals list-1 (append list-x list-1)) () "Appending empty list yields equal list"))
+  t)
+
+(defun test-persistent-list-append-different-class (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor) :count count))
+        (array-list (fill (make-instance 'array-list) :count count))
+        (doubly-linked-list (fill (make-instance 'doubly-linked-list) :count count)))
+    (assert (eq (class-of list) (class-of (append list array-list))) () "Appending list yields instance of same class as first list.")
+    (assert (eq (class-of list) (class-of (append list doubly-linked-list))) () "Appending list yields instance of same class as first list.")
+    (assert (eq (class-of list) (class-of (append list (append array-list doubly-linked-list)))) () "Appending list yields instance of same class as first list."))
+  t)
+
+(defun test-persistent-list-append-type-compatibility (list-constructor)
+  (let ((list-1 (fill (funcall list-constructor) :count 20))
+        (list-2 (apply #'add (funcall list-constructor :type 'character :fill-elt #\a) #[#\a #\z])))
+    (assert (eq (type list-1) (type (append list-1 list-2))) () "Appending specialized list to more general list succeeds.")
+    (handler-case (append list-2 list-1)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Cannot APPEND more general list to specialized list."))))
+  t)
+
 (defun test-persistent-list-time (list-constructor)
   (let ((list (funcall list-constructor)))
     (format t "Add to front of list.~%")
@@ -451,6 +567,7 @@ t)
                  test-persistent-list-clear
                  test-persistent-list-elements
                  test-persistent-list-contains
+                 test-persistent-list-contains-wrong-type
                  test-persistent-list-contains-predicate
                  test-persistent-list-contains-arithmetic
                  test-persistent-list-equals
@@ -458,8 +575,10 @@ t)
                  test-persistent-list-equals-transform
                  test-persistent-list-each
                  test-persistent-list-add
+                 test-persistent-list-add-wrong-type
                  test-persistent-list-insert
                  test-persistent-list-insert-fill-zero
+                 test-persistent-list-insert-wrong-type
                  test-persistent-list-insert-negative-index
                  test-persistent-list-insert-end
 ;;                 test-persistent-list-insert-offset
@@ -469,15 +588,20 @@ t)
                  test-persistent-list-nth
                  test-persistent-list-nth-negative-index
                  test-persistent-list-setf-nth
+                 test-persistent-list-setf-nth-wrong-type
                  test-persistent-list-setf-nth-negative-index
                  test-persistent-list-setf-nth-out-of-bounds
                  test-persistent-list-index
+                 test-persistent-list-index-wrong-type
                  test-persistent-list-index-predicate
                  test-persistent-list-index-arithmetic
                  test-persistent-list-slice
                  test-persistent-list-slice-negative-index
                  test-persistent-list-slice-corner-cases
                  test-persistent-list-reverse
+                 test-list-append
+                 test-list-append-different-class
+                 test-list-append-type-compatibility
                  test-persistent-list-time)))
     (notany #'null (loop for test in tests
                          collect (progn
@@ -486,4 +610,4 @@ t)
 
 (deftest test-persistent-list ()
   (check
-   (persistent-list-test-suite #'(lambda (&key fill-elt) (make-instance 'persistent-list :fill-elt fill-elt)))) )
+   (persistent-list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'persistent-list :type type :fill-elt fill-elt)))) )

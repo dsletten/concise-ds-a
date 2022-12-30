@@ -1,5 +1,3 @@
-;#!/usr/local/bin/sbcl --script
-
 ;;;;   Hey, Emacs, this is a -*- Mode: Lisp; Syntax: Common-Lisp -*- file!
 ;;;;
 ;;;;   Lisp is a programmable programming language.

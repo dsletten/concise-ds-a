@@ -31,6 +31,13 @@
 (use-package :test)
 
 (defun test-list-constructor (list-constructor)
+  (handler-case (let ((list (funcall list-constructor :type 'string)))
+                  (declare (ignore list)))
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Type of FILL-ELT must match list TYPE.~%")))
   (let ((list (funcall list-constructor)))
     (assert (emptyp list) () "New list should be empty.")
     (assert (zerop (size list)) () "Size of new list should be zero.")
@@ -94,6 +101,16 @@
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 1 to count
           do (assert (= (contains list i) i) () "The list should contain the value ~D" i)))
+  t)
+
+(defun test-list-contains-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (contains list :foo)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "List can't CONTAIN value of wrong type."))))
   t)
 
 (defun test-list-contains-predicate (list-constructor)
@@ -177,8 +194,31 @@
   (let ((list (funcall list-constructor)))
     (loop for i from 1 to count
           do (add list i)
-             (assert (= (size list) i) () "Size of list should be ~D not ~D" i (size list))
              (assert (= (nth list -1) i) () "Last element of list should be ~D not ~D" i (nth list -1))))
+  t)
+
+(defun test-list-add-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (add list 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ADD value of wrong type to list."))))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (add list 1 2 :k)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ADD value of wrong type to list."))))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (add list 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't ADD value of wrong type to list."))))
   t)
 
 (defun test-list-insert (list-constructor &key (fill-elt nil))
@@ -198,13 +238,27 @@
 (defun test-list-insert-fill-zero (list-constructor)
   (test-list-insert list-constructor :fill-elt 0))
 
+(defun test-list-insert-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (insert list 0 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't INSERT value of wrong type into empty list."))))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (insert list 0 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't INSERT value of wrong type into filled list."))))
+  t)
+
 (defun test-list-insert-negative-index (list-constructor)
   (let ((list (add (funcall list-constructor) 0)))
     (loop for i from 1 to 10
           do (insert list (- i) i))
-    ;; (let ((elts (loop for i below (size list) collect (nth list i)))
-    ;;       (expected (loop for i from 10 downto 0 collect i)))
-    ;;   (assert (equal elts expected) () "Inserted elements should be: ~A but found: ~A" expected elts)))
     (loop for i from 10 downto 0
           with iterator = (iterator list)
           do (assert (= i (current iterator)) () "Inserted element should be: ~A but found: ~A" i (current iterator))
@@ -318,6 +372,23 @@
           do (assert (= (nth list i) i) () "Element ~D should have value ~D not ~D" i i (nth list i))))
   t)
 
+(defun test-list-setf-nth-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (funcall list-constructor :type 'integer :fill-elt 0)))
+    (handler-case (setf (nth list 0) 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't SETF value of wrong type in list."))))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (setf (nth list 0) 1d0)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Can't SETF value of wrong type in list."))))
+  t)
+
 (defun test-list-setf-nth-negative-index (list-constructor &optional (count 1000))
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from -1 downto (- count)
@@ -340,6 +411,16 @@
   (let ((list (fill (funcall list-constructor) :count count)))
     (loop for i from 1 to count
           do (assert (= (index list i) (1- i)) () "The value ~D should be located at index ~D" (1- i) i)))
+  t)
+
+(defun test-list-index-wrong-type (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor :type 'integer :fill-elt 0) :count count)))
+    (handler-case (index list :foo)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Value of wrong type does not exist at any INDEX."))))
   t)
 
 (defun test-list-index-predicate (list-constructor)
@@ -405,6 +486,45 @@
     (assert (equals expected backward) () "Reversed list should be: ~A instead of: ~A~%" (slice expected 0 20) (slice backward 0 20))
     (let ((forward (reverse backward))) ; This has to come after first ASSERT with in-place reverses!
       (assert (equals original forward) () "Reversed reversed list should be: ~A instead of: ~A~%" (slice original 0 20) (slice forward 0 20))))
+  (assert (emptyp (reverse (funcall list-constructor))) () "Reversing empty list yields empty list")
+  t)
+
+(defun test-list-append (list-constructor &optional (count 1000))
+  (let* ((list-1 (fill (funcall list-constructor) :count count))
+         (list-2 (fill (funcall list-constructor :type 'real :fill-elt 0) :count count :generator #'(lambda (x) (coerce x 'double-float))))
+         (list-3 (append list-1 list-2))
+         (list-4 (append list-2 list-1))
+         (list-x (funcall list-constructor)))
+    (assert (eq (type list-1) (type list-3)) () "Type of result list should be ~S not ~S" (type list-1) (type list-2))
+    (assert (eq (type list-2) (type list-4)) () "Type of result list should be ~S not ~S" (type list-2) (type list-4))
+    (assert (= (size list-3) (size list-4) (+ (size list-1) (size list-2))) () "Result list should have same size as sum of input sizes")
+    (assert (equals list-1 (slice list-3 0 count)) () "Front of LIST-3 should match LIST-1")
+    (assert (equals list-2 (slice list-4 0 count)) () "Front of LIST-4 should match LIST-2")
+    (assert (equals list-2 (slice list-3 count count)) () "Rear of LIST-3 should match LIST-2")
+    (assert (equals list-1 (slice list-4 count count)) () "Rear of LIST-4 should match LIST-1")
+    (assert (equals list-1 (append list-1 list-x)) () "Appending empty list yields equal list")
+    (assert (equals list-1 (append list-x list-1)) () "Appending empty list yields equal list"))
+  t)
+
+(defun test-list-append-different-class (list-constructor &optional (count 1000))
+  (let ((list (fill (funcall list-constructor) :count count))
+        (array-list (fill (make-instance 'array-list) :count count))
+        (doubly-linked-list (fill (make-instance 'doubly-linked-list) :count count)))
+    (assert (eq (class-of list) (class-of (append list array-list))) () "Appending list yields instance of same class as first list.")
+    (assert (eq (class-of list) (class-of (append list doubly-linked-list))) () "Appending list yields instance of same class as first list.")
+    (assert (eq (class-of list) (class-of (append list (append array-list doubly-linked-list)))) () "Appending list yields instance of same class as first list."))
+  t)
+
+(defun test-list-append-type-compatibility (list-constructor)
+  (let ((list-1 (fill (funcall list-constructor) :count 20))
+        (list-2 (apply #'add (funcall list-constructor :type 'character :fill-elt #\a) #[#\a #\z])))
+    (assert (eq (type list-1) (type (append list-1 list-2))) () "Appending specialized list to more general list succeeds.")
+    (handler-case (append list-2 list-1)
+      (error (e)
+        (format t "Got expected error: ~A~%" e))
+      (:no-error (obj)
+        (declare (ignore obj))
+        (error "Cannot APPEND more general list to specialized list."))))
   t)
 
 ;;;
@@ -476,30 +596,31 @@
                   do (assert (= (nth list index) (1+ index)) () "~:R element should be: ~A" index (1+ index)))) ))
   t)
 
-
-;; (defun test-wave (list-constructor)
-;;   (let ((list (funcall list-constructor)))
-;;     (fill list 5000)
-;;     (assert (= (size list) 5000))
-;;     (dotimes (i 3000)
-;;       (pop list))
-;;     (assert (= (size list) 2000))
-;;     (fill list 5000)
-;;     (assert (= (size list) 7000))
-;;     (dotimes (i 3000)
-;;       (pop list))
-;;     (assert (= (size list) 4000))
-;;     (fill list 5000)
-;;     (assert (= (size list) 9000))
-;;     (dotimes (i 3000)
-;;       (pop list))
-;;     (assert (= (size list) 6000))
-;;     (fill list 4000)
-;;     (assert (= (size list) 10000))
-;;     (dotimes (i 10000)
-;;       (pop list))
-;;     (assert (emptyp list)))
-;;   t)
+(defun test-list-wave (list-constructor)
+  (let ((list (funcall list-constructor)))
+    (time
+     (progn
+       (fill list :count 5000)
+       (assert (= (size list) 5000))
+       (dotimes (i 3000)
+         (delete list -1))
+       (assert (= (size list) 2000))
+       (fill list :count 5000)
+       (assert (= (size list) 7000))
+       (dotimes (i 3000)
+         (delete list 0))
+       (assert (= (size list) 4000))
+       (fill list :count 5000)
+       (assert (= (size list) 9000))
+       (dotimes (i 3000)
+         (delete list -1))
+       (assert (= (size list) 6000))
+       (fill list :count 4000)
+       (assert (= (size list) 10000))
+       (dotimes (i 10000)
+         (delete list 0))
+       (assert (emptyp list)))) )
+  t)
 
 ;;;
 ;;;    :BACKWARD DOUBLY-LINKED-LIST-RATCHET ???
@@ -516,6 +637,7 @@
                  test-list-clear
                  test-list-elements
                  test-list-contains
+                 test-list-contains-wrong-type
                  test-list-contains-predicate
                  test-list-contains-arithmetic
                  test-list-equals
@@ -523,8 +645,10 @@
                  test-list-equals-transform
                  test-list-each
                  test-list-add
+                 test-list-add-wrong-type
                  test-list-insert
                  test-list-insert-fill-zero
+                 test-list-insert-wrong-type
                  test-list-insert-negative-index
                  test-list-insert-end
                  test-list-insert-offset
@@ -534,16 +658,22 @@
                  test-list-nth
                  test-list-nth-negative-index
                  test-list-setf-nth
+                 test-list-setf-nth-wrong-type
                  test-list-setf-nth-negative-index
                  test-list-setf-nth-out-of-bounds
                  test-list-index
+                 test-list-index-wrong-type
                  test-list-index-predicate
                  test-list-index-arithmetic
                  test-list-slice
                  test-list-slice-negative-index
                  test-list-slice-corner-cases
                  test-list-reverse
-                 test-list-time)))
+                 test-list-append
+                 test-list-append-different-class
+                 test-list-append-type-compatibility
+                 test-list-time
+                 test-list-wave)))
     (notany #'null (loop for test in tests
                          collect (progn
                                   (format t "~A~%" test)
@@ -551,44 +681,44 @@
 
 (deftest test-array-list ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'array-list :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'array-list :type type :fill-elt fill-elt)))) )
 
 (deftest test-array-list-x ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'array-list-x :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'array-list-x :type type :fill-elt fill-elt)))) )
 
 (deftest test-singly-linked-list ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'singly-linked-list :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'singly-linked-list :type type :fill-elt fill-elt)))) )
 
 (deftest test-singly-linked-list-x ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'singly-linked-list-x :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'singly-linked-list-x :type type :fill-elt fill-elt)))) )
 
 (deftest test-doubly-linked-list ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'doubly-linked-list :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'doubly-linked-list :type type :fill-elt fill-elt)))) )
 
 (deftest test-doubly-linked-list-ratchet ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'doubly-linked-list-ratchet :fill-elt fill-elt)))
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'doubly-linked-list-ratchet :fill-elt fill-elt :direction :backward)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'doubly-linked-list-ratchet :type type :fill-elt fill-elt)))
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'doubly-linked-list-ratchet :type type :fill-elt fill-elt :direction :backward)))) )
 
 (deftest test-doubly-linked-list-hash-table ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'doubly-linked-list-hash-table :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'doubly-linked-list-hash-table :type type :fill-elt fill-elt)))) )
 
 (deftest test-hash-table-list ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'hash-table-list :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'hash-table-list :type type :fill-elt fill-elt)))) )
 
 (deftest test-hash-table-list-x ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'hash-table-list-x :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'hash-table-list-x :type type :fill-elt fill-elt)))) )
 
 (deftest test-hash-table-list-z ()
   (check
-   (list-test-suite #'(lambda (&key fill-elt) (make-instance 'hash-table-list-z :fill-elt fill-elt)))) )
+   (list-test-suite #'(lambda (&key (type t) fill-elt) (make-instance 'hash-table-list-z :type type :fill-elt fill-elt)))) )
 
 (deftest test-list-all ()
   (check
