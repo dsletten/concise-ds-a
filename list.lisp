@@ -2925,8 +2925,8 @@
 ;;;
 ;;;    INITIALIZE-LIST is completely private now!
 ;;;    
-(flet ((initialize-list (type fill-elt store count)
-         (let ((new-list (make-instance 'persistent-list :type type :fill-elt fill-elt)))
+(flet ((initialize-list (l store count)
+         (let ((new-list (make-empty-list l)))
            (with-slots ((new-store store) (new-count count)) new-list
              (setf new-store store
                    new-count count))
@@ -2945,33 +2945,33 @@
              (cond ((null front) (setf rear (setf front copy)))
                    (t (setf rear (setf (rest rear) copy)))) ))))
   (defmethod add ((l persistent-list) &rest objs) ; Slow!
-    (with-slots (type fill-elt store count) l
+    (with-slots (store count) l
       (loop for elt in objs
             for i from 1
             collect elt into elts
-            finally (return (initialize-list type fill-elt (cl:append store elts) (+ i count)))) ))
+            finally (return (initialize-list l (cl:append store elts) (+ i count)))) ))
   (defmethod insert ((l persistent-list) (i integer) obj)
-    (with-slots (type fill-elt store count) l
-      (initialize-list type fill-elt (adjust-node store i #'(lambda (node) (cons obj node))) (1+ count))))
+    (with-slots (store count) l
+      (initialize-list l (adjust-node store i #'(lambda (node) (cons obj node))) (1+ count))))
   (defmethod delete :around ((l persistent-list) (i integer))
     (cond ((emptyp l) (error "List is empty")) ; ??????
           ((>= i (size l)) l)
           ((< i (- (size l))) l)
           (t (call-next-method))))
   (defmethod delete ((l persistent-list) (i integer))
-    (with-slots (type fill-elt store count) l
+    (with-slots (store count) l
       (multiple-value-bind (new-store doomed)
 ;          (adjust-node store i #'(lambda (node) (rest node)))
           (adjust-node store i #'rest)
-        (values (initialize-list type fill-elt new-store (1- count)) (first doomed)))) )
+        (values (initialize-list l new-store (1- count)) (first doomed)))) )
 ;;;
 ;;;    SETF method need not actually set anything???
 ;;;    Simply used for value...
 ;;;    http://www.lispworks.com/documentation/HyperSpec/Body/05_abi.htm
 ;;;    
   (defmethod (setf nth) (obj (l persistent-list) (i integer))
-    (with-slots (type fill-elt store count) l
-      (initialize-list type fill-elt (adjust-node store i #'(lambda (node) (cons obj (rest node)))) count)))
+    (with-slots (store count) l
+      (initialize-list l (adjust-node store i #'(lambda (node) (cons obj (rest node)))) count)))
   ;;
   ;;    Why doesn't this use ADD as the other SLICE methods do?
   ;;    Simply for performance? Avoids creating a lot of garbage...
@@ -2982,10 +2982,10 @@
   ;;            (end (min (+ i n) count)))
   ;;       (initialize-list type fill-elt (subseq store start end) (- end start)))) ))
   (defmethod slice ((l persistent-list) (i integer) &optional n)
-    (with-slots (type fill-elt store count) l
+    (with-slots (store count) l
       (let* ((start (min i count))
              (end (min (+ i n) count)))
-        (initialize-list type fill-elt (subseq store start end) (- end start)))) ))
+        (initialize-list l (subseq store start end) (- end start)))) ))
   
 (defmethod nth ((l persistent-list) (i integer))
   (with-slots (store) l

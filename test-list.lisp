@@ -182,8 +182,6 @@
 
 (defun test-list-each (list-constructor)
   (let ((list (apply #'add (funcall list-constructor) #[#\a #\z])))
-    ;; (loop for ch in #[#\a #\z]
-    ;;       do (add list ch))
     (let ((result (with-output-to-string (s)
                     (each list #'(lambda (ch) (write-char ch s)))) )
           (expected (coerce #[#\a #\z] 'string)))
@@ -229,7 +227,7 @@
     (insert list (1- count) elt1)
     (assert (= (size list) count) () "Insert should extend list.")
     (assert (eq (nth list (1- count)) elt1) () "Inserted element should be ~S." elt1)
-    (assert (eq (nth list 0) fill-elt) () "Empty elements should be filled with ~S." fill-elt)
+    (assert (every #'(lambda (elt) (eq elt fill-elt)) (elements (slice list 0 (1- count)))) () "Empty elements should be filled with ~S." fill-elt)
     (insert list 0 elt2)
     (assert (= (size list) (1+ count)) () "Insert should increase length.")
     (assert (eq (nth list 0) elt2) () "Inserted element should be ~S." elt2))
@@ -402,7 +400,7 @@
         (index 10)
         (elt :foo))
     (setf (nth list index) elt)
-    (assert (eq (nth list 0) (fill-elt list)) () "Empty elements should be filled with ~S." (fill-elt list))
+    (assert (every #'(lambda (elt) (eq elt (fill-elt list))) (elements (slice list 0 index))) () "Empty elements should be filled with ~S." (fill-elt list))
     (assert (= (size list) (1+ index)) () "List should expand to accommodate out-of-bounds index.")
     (assert (eq (nth list index) elt) () "~:R element should be: ~A" index elt))
   t)

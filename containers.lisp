@@ -41,9 +41,13 @@
   (:export :container :type :size :emptyp :clear :elements
            :dispenser
            :stack :push :pop :peek
-           :array-stack :linked-stack :hash-table-stack :persistent-stack
+           :array-stack :linked-stack :hash-table-stack :array-list-stack :linked-list-stack
+           :persistent-stack :persistent-linked-stack :persistent-list-stack
            :queue :enqueue :dequeue :front
-           :array-queue :linked-queue :recycling-queue :ring-buffer :hash-table-queue :persistent-queue
+           :ring-buffer :array-ring-buffer :linked-ring-buffer
+           :linked-queue :circular-queue :recycling-queue :hash-table-queue
+           :array-list-queue :linked-list-queue :dll-queue
+           :persistent-queue :persistent-linked-queue :persistent-list-queue
            :collection :contains :equals :each
            :iterator :current :next :done
            :list :fill-elt :add :append :insert :delete :nth :index :reverse :slice
