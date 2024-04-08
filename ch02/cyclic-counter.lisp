@@ -24,10 +24,20 @@
 ;;;;   Notes: Java Version of Fox's book.
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/lang.lisp")
-(load "/home/slytobias/lisp/packages/test.lisp")
+;;;;   Modulus should be > 1?!
+;;;; * (setf *cc* (make-counter 1))
+;;;; #<CYCLIC-COUNTER 0/1>
+;;;; * (advance *cc*)
+;;;; 0
+;;;; * (advance *cc*)
+;;;; 0
+;;;; * (advance *cc*)
+;;;; 0
+;;;;
+;;;;
+(load "/home/slytobias/lisp/packages/core.lisp")
 
-(defpackage :cyclic-counter (:use :common-lisp :lang :test) (:shadow :set))
+(defpackage :cyclic-counter (:use :common-lisp :core) (:shadow :set))
 
 (in-package :cyclic-counter)
 
@@ -42,12 +52,20 @@
 (defgeneric advance (counter &optional n)
   (:documentation "Advance the COUNTER by N."))
 
-(defgeneric initialize (counter &optional n)
-  (:documentation "Reset the COUNTER to N."))
+(defgeneric set (counter n)
+  (:documentation "Set the COUNTER to N."))
+
+(defgeneric reset (counter)
+  (:documentation "Set the COUNTER to 0."))
+(defmethod reset ((c counter))
+  (set c 0))
+
+;; (defmethod print-object ((c counter) stream)
+;;   (print-unreadable-object (c stream :type t)
+;;     (format stream "~D/~D" (index c) (modulus c))))
 
 (defmethod print-object ((c counter) stream)
-  (print-unreadable-object (c stream :type t)
-    (format stream "~D/~D" (index c) (modulus c))))
+  (format stream "#λ~A ~D/~Dλ" (type-of c) (index c) (modulus c)))
 
 (defclass cyclic-counter (counter)
   ((index :initform 0 :reader index)
@@ -68,36 +86,19 @@
   (with-slots (index modulus) counter
     (setf index (mod (+ index n) modulus))))
 
-(defmethod initialize ((counter cyclic-counter) &optional (n 0))
+(defmethod set ((counter cyclic-counter) n)
   (with-slots (index modulus) counter
     (setf index (mod n modulus))))
-
-;; (defun initialize (counter &optional (n 0))
-;;   "Initialize the COUNTER to the value N."
-;;   (with-slots (index modulus) counter
-;;     (setf index (mod n modulus))))
 
 ;; (defun advance (counter &optional (n 1))
 ;;   "Advance the COUNTER by N."
 ;;   (with-slots (index modulus) counter
 ;;     (setf index (mod (+ index n) modulus))))
 
-(deftest test-make-counter ()
-  (check
-   (handler-case (make-counter 0)
-     (error (e)
-       (format t "Got expected error: ~A~%" e)
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Can't create counter with modulus of 1.~%")))) )
-
-(deftest test-counter ()
-  (check
-   (let ((c (make-counter 10)))
-     (loop repeat 11
-           do (advance c))
-     (= 1 (index c)))))
+;; (defun set (counter &optional (n 0))
+;;   "Set the COUNTER to the value N."
+;;   (with-slots (index modulus) counter
+;;     (setf index (mod n modulus))))
 
 (defclass persistent-cyclic-counter (counter)
   ((index :initform 0 :initarg :index :reader index)
@@ -113,45 +114,112 @@
 ;;;    This is peculiar to CLOS since the "constructor" is sort of split between MAKE-PERSISTENT-COUNTER
 ;;;    and INITIALIZE-INSTANCE.
 ;;;    
+
+;; (defmethod initialize-instance :after ((c persistent-cyclic-counter) &rest initargs)
+;;   (declare (ignore initargs))           
+;;   (with-slots (index modulus) c
+;;     (assert (>= modulus 1) () "Modulus must be at least 1.")
+;;     (setf index (mod index modulus))))
+
+;;;
+;;;    This :BEFORE method is actually inconsistent with having an :INITFORM on
+;;;    the MODULUS slot. This method assumes that the :MODULUS initarg will always
+;;;    be supplied.
+;;;    
+(defmethod initialize-instance :before ((c persistent-cyclic-counter) &rest initargs)
+  (assert (>= (getf initargs :modulus) 1) () "Modulus must be at least 1."))
+
 (defmethod initialize-instance :after ((c persistent-cyclic-counter) &rest initargs)
   (declare (ignore initargs))           
   (with-slots (index modulus) c
-    (assert (>= modulus 1) () "Modulus must be at least 1.")
     (setf index (mod index modulus))))
-
-;;;
-;;;    Weird way to handle OPTIONAL arg?
-;;;    
-(defun make-persistent-counter (m &optional n)
-  (if (null n)
-      (make-instance 'persistent-cyclic-counter :modulus m)
-      (make-instance 'persistent-cyclic-counter :index m :modulus n))) ; ????
 
 ;; (defun make-persistent-counter (m &optional n)
 ;;   (cond ((null n) (make-persistent-counter 0 m))
 ;;         ((< n 1) (error "Modulus must be at least 1."))
 ;;         (t (make-instance 'persistent-cyclic-counter :index (mod m n) :modulus n))))
 
+;;;
+;;;    Weird way to handle OPTIONAL arg?
+;;;    What is the point of this function? User should not be able to create a counter
+;;;    with a non-zero index? This is only ever used by ADVANCE and SET, but they always
+;;;    provide both slot values...
+;;;    
+;; (defun make-persistent-counter (m &optional n)
+;;   (if (null n)
+;;       (make-instance 'persistent-cyclic-counter :modulus m)
+;;       (make-instance 'persistent-cyclic-counter :index m :modulus n))) ; ????
+
+(defun make-persistent-counter (m)
+  (make-instance 'persistent-cyclic-counter :modulus m))
+
 (defmethod advance ((counter persistent-cyclic-counter) &optional (n 1))
-  (make-persistent-counter (+ (index counter) n) (modulus counter)))
+  (make-instance 'persistent-cyclic-counter :modulus (modulus counter) :index (+ (index counter) n)))
 
-(defmethod initialize ((counter cyclic-counter) &optional (n 0))
-  (make-persistent-counter n (modulus counter)))
+(defmethod set ((counter persistent-cyclic-counter) n)
+  (make-instance 'persistent-cyclic-counter :modulus (modulus counter) :index n))
 
-(deftest test-make-persistent-counter ()
-  (check
-   (handler-case (make-persistent-counter 0)
-     (error (e)
-       (format t "Got expected error: ~A~%" e)
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Can't create counter with modulus of 1.~%")))) )
+;; (defmethod advance ((counter persistent-cyclic-counter) &optional (n 1))
+;;   (make-persistent-counter (+ (index counter) n) (modulus counter)))
 
-(deftest test-persistent-counter ()
-  (check
-   (loop repeat 11
-         for c = (make-persistent-counter 10) then (advance c)
-         finally (return (= 1 (index (advance c)))) )))
+;; (defmethod set ((counter persistent-cyclic-counter) n)
+;;   (make-persistent-counter n (modulus counter)))
 
 
+(set-dispatch-macro-character #\# #\GREEK_SMALL_LETTER_LAMDA ; !!
+  #'(lambda (stream ch arg)
+      (declare (ignore ch arg))
+      (destructuring-bind (class fraction) (read-delimited-list #\GREEK_SMALL_LETTER_LAMDA stream t)
+(print fraction)
+        (let ((index (numerator fraction))
+              (modulus (denominator fraction)))
+          (print index)
+          (print modulus)
+          (ecase class
+            (cyclic-counter (let ((counter (make-counter modulus)))
+                              (advance counter index)
+                              counter))
+            (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) )))
+;      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) ) ; Should this be EQUALP?
+;;   #'(lambda (stream ch arg)
+;;       (declare (ignore ch arg))
+;;       (let* ((class (read stream))
+;;              (fraction (read stream))
+;;              (index (numerator fraction))
+;;              (modulus (denominator fraction)))
+;;         (ecase class
+;;           (cyclic-counter (let ((counter (make-counter modulus)))
+;;                             (advance counter index)
+;;                             counter))
+;;           (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) ))
+;; ;      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) ) ; Should this be EQUALP?
+
+(set-syntax-from-char #\GREEK_SMALL_LETTER_LAMDA #\))
+
+
+;; (set-dispatch-macro-character #\# #\[
+;;   #'(lambda (stream ch arg)
+;;       (declare (ignore ch arg))
+;;       (destructuring-bind (m &optional n step) (read-delimited-list #\] stream t)
+;;         (if step
+;;             (if (and (numberp step)
+;;                      (or (and (numberp m) (numberp n))
+;;                          (and (characterp m) (characterp n))))
+;;                 `',(make-range m n step)
+;;                 `(make-range ,m ,n ,step))
+;;             (if n
+;;                 (if (or (and (numberp m) (numberp n))
+;;                         (and (characterp m) (characterp n)))
+;;                     `',(make-range m n)
+;;                     `(make-range ,m ,n))
+;;                 (if (or (numberp m) (characterp m))
+;;                     `',(make-range m)
+;;                     `(make-range ,m)))) )))
+
+;;;
+;;;    D'oh!
+;;;    
+;; (set-macro-character #\" #'(lambda (stream ch)
+;;                              (declare (ignore ch))
+;;                              `(vector ,@(read-delimited-list #\" stream t))))
+;; (set-syntax-from-char #\" #\))
