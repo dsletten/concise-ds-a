@@ -65,7 +65,7 @@
 ;;     (format stream "~D/~D" (index c) (modulus c))))
 
 (defmethod print-object ((c counter) stream)
-  (format stream "#λ~A ~D/~Dλ" (type-of c) (index c) (modulus c)))
+  (format stream "#λ~A (~D ~D)λ" (type-of c) (index c) (modulus c)))
 
 (defclass cyclic-counter (counter)
   ((index :initform 0 :reader index)
@@ -169,17 +169,12 @@
 (set-dispatch-macro-character #\# #\GREEK_SMALL_LETTER_LAMDA ; !!
   #'(lambda (stream ch arg)
       (declare (ignore ch arg))
-      (destructuring-bind (class fraction) (read-delimited-list #\GREEK_SMALL_LETTER_LAMDA stream t)
-(print fraction)
-        (let ((index (numerator fraction))
-              (modulus (denominator fraction)))
-          (print index)
-          (print modulus)
-          (ecase class
-            (cyclic-counter (let ((counter (make-counter modulus)))
-                              (advance counter index)
-                              counter))
-            (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) )))
+      (destructuring-bind (class (index modulus)) (read-delimited-list #\GREEK_SMALL_LETTER_LAMDA stream t)
+        (ecase class
+          (cyclic-counter (let ((counter (make-counter modulus)))
+                            (advance counter index)
+                            counter))
+          (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) ))
 ;      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) ) ; Should this be EQUALP?
 ;;   #'(lambda (stream ch arg)
 ;;       (declare (ignore ch arg))
