@@ -34,12 +34,18 @@
 ;;;; * (advance *cc*)
 ;;;; 0
 ;;;;
+;;;;    http://xahlee.info/comp/unicode_punctuation_symbols.html
 ;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
 
 (defpackage :cyclic-counter (:use :common-lisp :core) (:shadow :set))
 
 (in-package :cyclic-counter)
+
+;;;
+;;;    SBCL enforce slot :TYPE
+;;;    
+(declaim (optimize safety))
 
 (defclass counter () ())
 
@@ -65,11 +71,24 @@
 ;;     (format stream "~D/~D" (index c) (modulus c))))
 
 (defmethod print-object ((c counter) stream)
-  (format stream "#λ~A (~D ~D)λ" (type-of c) (index c) (modulus c)))
+  (format stream "#⧙~A (~D ~D)⧘" (type-of c) (index c) (modulus c)))
+ 
+;(set-dispatch-macro-character #\# #\GREEK_SMALL_LETTER_LAMDA ; !!
+(set-dispatch-macro-character #\# #\⧙
+  #'(lambda (stream ch arg)
+      (declare (ignore ch arg))
+      (destructuring-bind (class (index modulus)) (read-delimited-list #\⧘ stream t)
+        (ecase class
+          (cyclic-counter (let ((counter (make-counter modulus)))
+                            (advance counter index)
+                            counter))
+          (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) ))
+
+(set-syntax-from-char #\⧘ #\))
 
 (defclass cyclic-counter (counter)
-  ((index :initform 0 :reader index)
-   (modulus :initform 1 :initarg :modulus :reader modulus)))
+  ((index :initform 0 :reader index :type (integer 0))
+   (modulus :initform 1 :initarg :modulus :reader modulus :type (integer 1))))
 
 (defmethod initialize-instance :after ((c cyclic-counter) &rest initargs)
   (declare (ignore initargs))           
@@ -101,8 +120,8 @@
 ;;     (setf index (mod n modulus))))
 
 (defclass persistent-cyclic-counter (counter)
-  ((index :initform 0 :initarg :index :reader index)
-   (modulus :initform 1 :initarg :modulus :reader modulus)))
+  ((index :initform 0 :initarg :index :reader index :type (integer 0))
+   (modulus :initform 1 :initarg :modulus :reader modulus :type (integer 1))))
 
 ;;;
 ;;;    It seems cleaner to have the constructor (MAKE-PERSISTENT-COUNTER) pass in the
@@ -164,57 +183,3 @@
 
 ;; (defmethod set ((counter persistent-cyclic-counter) n)
 ;;   (make-persistent-counter n (modulus counter)))
-
-
-(set-dispatch-macro-character #\# #\GREEK_SMALL_LETTER_LAMDA ; !!
-  #'(lambda (stream ch arg)
-      (declare (ignore ch arg))
-      (destructuring-bind (class (index modulus)) (read-delimited-list #\GREEK_SMALL_LETTER_LAMDA stream t)
-        (ecase class
-          (cyclic-counter (let ((counter (make-counter modulus)))
-                            (advance counter index)
-                            counter))
-          (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) ))
-;      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) ) ; Should this be EQUALP?
-;;   #'(lambda (stream ch arg)
-;;       (declare (ignore ch arg))
-;;       (let* ((class (read stream))
-;;              (fraction (read stream))
-;;              (index (numerator fraction))
-;;              (modulus (denominator fraction)))
-;;         (ecase class
-;;           (cyclic-counter (let ((counter (make-counter modulus)))
-;;                             (advance counter index)
-;;                             counter))
-;;           (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) ))
-;; ;      `(make-set :test #'equalp :elements (list ,@(read-delimited-list #\} stream t)))) ) ; Should this be EQUALP?
-
-(set-syntax-from-char #\GREEK_SMALL_LETTER_LAMDA #\))
-
-
-;; (set-dispatch-macro-character #\# #\[
-;;   #'(lambda (stream ch arg)
-;;       (declare (ignore ch arg))
-;;       (destructuring-bind (m &optional n step) (read-delimited-list #\] stream t)
-;;         (if step
-;;             (if (and (numberp step)
-;;                      (or (and (numberp m) (numberp n))
-;;                          (and (characterp m) (characterp n))))
-;;                 `',(make-range m n step)
-;;                 `(make-range ,m ,n ,step))
-;;             (if n
-;;                 (if (or (and (numberp m) (numberp n))
-;;                         (and (characterp m) (characterp n)))
-;;                     `',(make-range m n)
-;;                     `(make-range ,m ,n))
-;;                 (if (or (numberp m) (characterp m))
-;;                     `',(make-range m)
-;;                     `(make-range ,m)))) )))
-
-;;;
-;;;    D'oh!
-;;;    
-;; (set-macro-character #\" #'(lambda (stream ch)
-;;                              (declare (ignore ch))
-;;                              `(vector ,@(read-delimited-list #\" stream t))))
-;; (set-syntax-from-char #\" #\))
