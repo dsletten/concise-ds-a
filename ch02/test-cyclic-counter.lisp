@@ -41,7 +41,16 @@
        t)
      (:no-error (obj)
        (declare (ignore obj))
-       (error "Can't create counter with modulus of 0.~%")))) )
+       (error "Can't create counter with modulus of 0.~%")))
+   (handler-case (make-counter 2.3)
+     (error (e)
+       (format t "Got expected error: ~A~%" e)
+       t)
+     (:no-error (obj)
+       (declare (ignore obj))
+       (error "Can't create counter with non-integer modulus.~%")))
+   (zerop (index (make-instance 'cyclic-counter)))
+   (= 1 (modulus (make-instance 'cyclic-counter)))) )
 
 (deftest test-advance ()
   (check
@@ -110,58 +119,3 @@
    (test-set)
    (test-reset)
    (test-rollover)))
-
-(deftest test-make-persistent-counter ()
-  (check
-   (zerop (index (make-persistent-counter 8)))
-   (let ((n 10))
-     (= n (modulus (make-persistent-counter n))))
-   (handler-case (make-persistent-counter 0)
-     (error (e)
-       (format t "Got expected error: ~A~%" e)
-       t)
-     (:no-error (obj)
-       (declare (ignore obj))
-       (error "Can't create counter with modulus of 0.~%")))) )
-
-(deftest test-persistent-counter-advance ()
-  (check
-   (= 1 (index (advance (make-persistent-counter 10))))
-   (let ((n 10))
-     (zerop (index (advance (make-persistent-counter n) n))))
-   (let ((n 10))
-     (= (- n 2) (index (advance (make-persistent-counter n) -2)))) ))
-
-(deftest test-persistent-counter-set ()
-  (check
-   (zerop (index (set (advance (make-persistent-counter 10)) 0)))
-   (zerop (index (set (advance (make-persistent-counter 10) 2) 0)))
-   (let ((n 10))
-     (= (- n 4) (index (set (make-persistent-counter n) -4))))
-   (let ((n 10)
-         (m 6))
-     (= (mod m n) (index (set (advance (make-persistent-counter n)) m))))
-   (let ((n 10)
-         (m 16))
-     (= (mod m n) (index (set (make-persistent-counter n) m)))) ))
-
-(deftest test-persistent-counter-reset ()
-  (check
-   (zerop (index (reset (advance (make-persistent-counter 10)))))
-   (let ((n 10))
-     (zerop (index (reset (set (make-persistent-counter n) (1- n)))) ))))
-
-(deftest test-persistent-counter-rollover ()
-  (check
-   (loop with n = 10
-         repeat n
-         for c = (advance (make-persistent-counter n)) then (advance c)
-         finally (return (zerop (index c)))) ))
-
-(deftest test-persistent-counter ()
-  (combine-results
-   (test-make-persistent-counter)
-   (test-persistent-counter-advance)
-   (test-persistent-counter-set)
-   (test-persistent-counter-reset)
-   (test-persistent-counter-rollover)))
