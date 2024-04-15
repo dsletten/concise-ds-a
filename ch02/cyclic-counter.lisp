@@ -49,17 +49,36 @@
 
 (defclass counter () ())
 
+;;;
+;;;    Still not sure if this right?!
+;;;    
+(defmethod make-instance :around ((class (eql (find-class 'counter))) &rest initargs)
+  (declare (ignore class initargs))           
+  (error "Cannot instantiate COUNTER."))
+
 (defgeneric index (counter)
   (:documentation "Return the INDEX for COUNTER."))
+(defmethod index ((c counter))
+  (declare (ignore c))
+  (error "COUNTER does not implement INDEX"))
 
 (defgeneric modulus (counter)
   (:documentation "Return the MODULUS for COUNTER."))
+(defmethod modulus ((c counter))
+  (declare (ignore c))
+  (error "COUNTER does not implement MODULUS"))
 
 (defgeneric advance (counter &optional n)
   (:documentation "Advance the COUNTER by N."))
+(defmethod advance ((c counter) &optional n)
+  (declare (ignore c n))
+  (error "COUNTER does not implement ADVANCE"))
 
 (defgeneric set (counter n)
   (:documentation "Set the COUNTER to N."))
+(defmethod set ((c counter) n)
+  (declare (ignore c n))
+  (error "COUNTER does not implement SET"))
 
 (defgeneric reset (counter)
   (:documentation "Set the COUNTER to 0."))
