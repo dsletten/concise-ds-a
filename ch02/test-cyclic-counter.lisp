@@ -64,7 +64,7 @@
    (let* ((n 10)
           (c (make-counter n)))
      (advance c -2)
-     (= (- n 2) (index c)))))
+     (= (- n 2) (index c)))) )
 
 (deftest test-set ()
   (check
@@ -90,7 +90,7 @@
           (m 16)
           (c (make-counter n)))
      (set c m)
-     (= (mod m n) (index c)))))
+     (= (mod m n) (index c)))) )
 
 (deftest test-reset ()
   (check
@@ -102,7 +102,7 @@
           (c (make-counter n)))
      (set c (1- n))
      (reset c)
-     (zerop (index c)))))
+     (zerop (index c)))) )
 
 (deftest test-rollover ()
   (check

@@ -82,7 +82,7 @@
 
 (deftest test-persistent-counter-reset ()
   (check
-   (zerop (index (reset (advance (make-persistent-counter 10)))))
+   (zerop (index (reset (advance (make-persistent-counter 10)))) )
    (let ((n 10))
      (zerop (index (reset (set (make-persistent-counter n) (1- n)))) ))))
 
@@ -92,6 +92,27 @@
          repeat n
          for c = (advance (make-persistent-counter n)) then (advance c)
          finally (return (zerop (index c)))) ))
+
+;;;
+;;;    Same semantics of Ruby/JavaScript
+;;;    
+(deftest test-persistent-counter-rollover ()
+  (check
+   (let* ((n 10)
+          (c (make-persistent-counter n)))
+     (loop repeat n
+           do (setf c (advance c)))
+     (zerop (index c)))) )
+
+;;;
+;;;    More like semantics of Clojure version (loop/recur).
+;;;    
+(deftest test-persistent-counter-rollover ()
+  (check
+   (do* ((n 10)
+         (i 0 (1+ i))
+         (c (make-persistent-counter n) (advance c)))
+        ((= i n) (zerop (index c)))) ))
 
 (deftest test-persistent-counter ()
   (combine-results
