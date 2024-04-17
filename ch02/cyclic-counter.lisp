@@ -86,20 +86,20 @@
   (set c 0))
 
 (defmethod print-object ((c counter) stream)
-  (format stream "#⧙~A (~D ~D)⧘" (class-name (class-of c)) (index c) (modulus c)))
+  (format stream "⁌~A (~D ~D)⁍" (class-name (class-of c)) (index c) (modulus c)))
  
 ;(set-dispatch-macro-character #\# #\GREEK_SMALL_LETTER_LAMDA ; !!
-(set-dispatch-macro-character #\# #\⧙
-  #'(lambda (stream ch arg)
-      (declare (ignore ch arg))
-      (destructuring-bind (class (index modulus)) (read-delimited-list #\⧘ stream t)
-        (ecase class
-          (cyclic-counter (let ((counter (make-counter modulus)))
-                            (advance counter index)
-                            counter))
-          (persistent-cyclic-counter (advance (make-persistent-counter modulus) index)))) ))
+(set-macro-character #\⁌ #'(lambda (stream ch)
+                             (declare (ignore ch))
+                             (destructuring-bind (class (index modulus)) (read-delimited-list #\⁍ stream t)
+                               (let ((counter (gensym)))
+                                 (ecase class
+                                   (cyclic-counter `(let ((,counter (make-counter ,modulus)))
+                                                      (advance ,counter ,index)
+                                                      ,counter))
+                                   (persistent-cyclic-counter `(advance (make-persistent-counter ,modulus) ,index)))) )))
 
-(set-syntax-from-char #\⧘ #\))
+(set-syntax-from-char #\⁍ #\))
 
 (defclass cyclic-counter (counter)
   ((index :initform 0 :reader index :type (integer 0))
