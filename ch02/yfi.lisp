@@ -21,12 +21,7 @@
 ;;;;
 ;;;;   Example:
 ;;;;
-;;;;   Notes: Interesting example of shared code--not superclass/subclass
-;;;;          but rather 2 packages where one shares some of the other
-;;;;          and "overrides" some. E.g., ADD names 2 distinct generic functions:
-;;;;          YFI::ADD and YFI-KEYS::ADD. Even more interesting is YFI:=, which
-;;;;          calls EQUALS. However, there are 2 such GFs: YFI::EQUALS and
-;;;;          YFI-KEYS::EQUALS. The correct version is called in each package.
+;;;;   Notes: 
 ;;;;
 ;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
