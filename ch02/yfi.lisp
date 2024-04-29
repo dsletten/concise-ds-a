@@ -41,7 +41,7 @@
   (assert (not (minusp (length yfi))) () "Length must be non-negative."))
 
 (defun make-yfi (&rest args)
-  (assert (every (every-pred #'integerp (compose #'not #'minusp)) args)
+  (assert (every (every-pred #'integerp (complement #'minusp)) args)
           ()
           "Length components must be non-negative integers.")
   (flet ((feet->inches (feet)

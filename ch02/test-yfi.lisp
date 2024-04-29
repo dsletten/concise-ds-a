@@ -127,7 +127,14 @@
           (= b c a)
           (= c a b)
           (= c b a)))
-   (= (make-yfi 5) (+ 2 3) (+ (make-yfi 2) (make-yfi 3)))) )
+   (= (make-yfi 5) (+ 2 3) (+ (make-yfi 2) (make-yfi 3)))
+   (let ((random-state (make-random-state t)))
+     (dotimes (i 100 t)
+       (let* ((length (random 200 random-state))
+              (yfi1 (make-instance 'yfi :length length))
+              (yfi2 (make-yfi (yards yfi1) (feet yfi1) (inches yfi1))))
+         (unless (= yfi1 yfi2)
+           (return nil)))) )))
    
 (deftest test-yfi ()
   (combine-results
@@ -240,7 +247,14 @@
           (= b c a)
           (= c a b)
           (= c b a)))
-   (= (make-yfi :inches 5) (+ 2 3) (+ (make-yfi :inches 2) (make-yfi :inches 3)))) )
+   (= (make-yfi :inches 5) (+ 2 3) (+ (make-yfi :inches 2) (make-yfi :inches 3)))
+   (let ((random-state (make-random-state t)))
+     (dotimes (i 100 t)
+       (let* ((length (random 200 random-state))
+              (yfi1 (make-instance 'yfi :length length))
+              (yfi2 (make-yfi :inches (inches yfi1) :feet (feet yfi1) :yards (yards yfi1))))
+         (unless (= yfi1 yfi2)
+           (return nil)))) )))
    
 (deftest test-yfi ()
   (combine-results
