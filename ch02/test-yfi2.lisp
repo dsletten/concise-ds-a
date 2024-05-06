@@ -1,11 +1,11 @@
 ;;;;   Hey, Emacs, this is a -*- Mode: Lisp; Syntax: Common-Lisp -*- file!
 ;;;;
-;;;;   APL is like a perfect diamond: if you add anything to it, it becomes flawed. In contrast, Lisp is like a ball of mud--if you add more to it, you get a bigger ball of mud.
-;;;;   -- Joel Moses (attributed)
+;;;;   Of all the languages I know, I like Lisp the best, simply because it's the most beautiful.
+;;;;   -- Paul Graham
 ;;;;
 ;;;;   Name:               test-yfi.lisp
 ;;;;
-;;;;   Started:            Sat May  4 03:47:53 2024
+;;;;   Started:            Mon Apr 15 22:19:58 2024
 ;;;;   Modifications:
 ;;;;
 ;;;;   Purpose:
@@ -26,7 +26,7 @@
 ;;;;
 (load "/home/slytobias/lisp/packages/test.lisp")
 
-(in-package :yfi)
+(in-package :yfi2)
 
 (use-package :test)
 
@@ -54,7 +54,10 @@
    (cl:= 12 (length (make-yfi 1 0)))
    (cl:= 36 (length (make-yfi 1 0 0)))
    (cl:= 49 (length (make-yfi 1 1 1)))
-   (cl:= 100 (length (+ (make-yfi 49) (make-yfi 51)))) ))
+   (cl:= 100 (length (+ (make-yfi 49) (make-yfi 51))))
+   (cl:= 100 (length (+ (make-yfi 49) 51)))
+   (cl:= 100 (length (+ 49 (make-yfi 51))))
+   (cl:= 100 (length (+ 49 51)))) )
 
 (deftest test-inches ()
   (check
@@ -86,11 +89,16 @@
 (deftest test-+ ()
   (check
    (typep (+) 'yfi)
-   (typep (+ (make-yfi 1)) 'yfi)
-   (= (make-yfi) (+))
-   (let ((a (make-yfi 1)))
-     (and (= a (+ (make-yfi) a))
-          (= a (+ a (make-yfi)))) )
+   (typep (+ 1) 'yfi)
+   (= 0 (+))
+   (= 1 (+ 0 1))
+   (= 1 (+ (make-yfi) (make-yfi 1)))
+   (let ((a 10)
+         (b 20))
+     (= (+ a b) (+ b a)))
+   (let ((a 20)
+         (b (make-yfi 30)))
+     (= (+ a b) (+ b a)))
    (let ((a (make-yfi 20))
          (b (make-yfi 30)))
      (= (+ a b) (+ b a)))
@@ -101,17 +109,16 @@
          (b (make-yfi 30))
          (c (make-yfi 40)))
      (= (+ (+ a b) c) (+ a (+ b c)) (+ a b c)))
-   (cl:= (loop for i from 1 to 10 summing i)
-         (length (apply #'+ (mapcar #'make-yfi (loop for i from 1 to 10 collect i)))) )))
+   (= (loop for i from 1 to 10 summing i)
+      (apply #'+ (loop for i from 1 to 10 collect i))
+      (apply #'+ (mapcar #'make-yfi (loop for i from 1 to 10 collect i)))) ))
 
 (deftest test-= ()
   (check
-   (= (make-yfi))
-   (= (make-yfi 1) (make-yfi 1))
-   (not (= (+) (make-yfi 1)))
-   (= (make-yfi 5)
-      (+ (make-yfi 2) (make-yfi 3)))
-   (let ((a (+ (make-yfi 20) (make-yfi 19)))
+   (= 0)
+   (= 1 1)
+   (not (= 0 1))
+   (let ((a 39)
          (b (make-yfi 39))
          (c (make-yfi 1 0 3)))
      (and (= a b c)
@@ -120,6 +127,7 @@
           (= b c a)
           (= c a b)
           (= c b a)))
+   (= (make-yfi 5) (+ 2 3) (+ (make-yfi 2) (make-yfi 3)))
    (let ((random-state (make-random-state t)))
      (dotimes (i 100 t)
        (let* ((length (random 200 random-state))
@@ -138,7 +146,7 @@
    (test-+)
    (test-=)))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(in-package :yfi-keys)
+(in-package :yfi-keys2)
 
 (use-package :test)
 
@@ -166,7 +174,10 @@
    (cl:= 12 (length (make-yfi :feet 1)))
    (cl:= 36 (length (make-yfi :yards 1)))
    (cl:= 49 (length (make-yfi :yards 1 :feet 1 :inches 1)))
-   (cl:= 100 (length (+ (make-yfi :inches 49) (make-yfi :inches 51)))) ))
+   (cl:= 100 (length (+ (make-yfi :inches 49) (make-yfi :inches 51))))
+   (cl:= 100 (length (+ (make-yfi :inches 49) 51)))
+   (cl:= 100 (length (+ 49 (make-yfi :inches 51))))
+   (cl:= 100 (length (+ 49 51)))) )
 
 (deftest test-inches ()
   (check
@@ -198,11 +209,16 @@
 (deftest test-+ ()
   (check
    (typep (+) 'yfi)
-   (typep (+ (make-yfi :inches 1)) 'yfi)
-   (= (make-yfi) (+))
-   (let ((a (make-yfi :inches 1)))
-     (and (= a (+ (make-yfi) a))
-          (= a (+ a (make-yfi)))) )
+   (typep (+ 1) 'yfi)
+   (= 0 (+))
+   (= 1 (+ 0 1))
+   (= 1 (+ (make-yfi) (make-yfi :inches 1)))
+   (let ((a 10)
+         (b 20))
+     (= (+ a b) (+ b a)))
+   (let ((a 20)
+         (b (make-yfi :inches 30)))
+     (= (+ a b) (+ b a)))
    (let ((a (make-yfi :inches 20))
          (b (make-yfi :inches 30)))
      (= (+ a b) (+ b a)))
@@ -213,17 +229,16 @@
          (b (make-yfi :inches 30))
          (c (make-yfi :inches 40)))
      (= (+ (+ a b) c) (+ a (+ b c)) (+ a b c)))
-   (cl:= (loop for i from 1 to 10 summing i)
-         (length (apply #'+ (mapcar #'(lambda (inches) (make-instance 'yfi :length inches)) (loop for i from 1 to 10 collect i)))) )))
+   (= (loop for i from 1 to 10 summing i)
+      (apply #'+ (loop for i from 1 to 10 collect i))
+      (apply #'+ (mapcar #'(lambda (inches) (make-instance 'yfi :length inches)) (loop for i from 1 to 10 collect i)))) ))
 
 (deftest test-= ()
   (check
-   (= (make-yfi))
-   (= (make-yfi :inches 1) (make-yfi :inches 1))
-   (not (= (+) (make-yfi :inches 1)))
-   (= (make-yfi :inches 5)
-      (+ (make-yfi :inches 2) (make-yfi :inches 3)))
-   (let ((a (+ (make-yfi :inches 20) (make-yfi :inches 19)))
+   (= 0)
+   (= 1 1)
+   (not (= 0 1))
+   (let ((a 39)
          (b (make-yfi :inches 39))
          (c (make-yfi :yards 1 :inches 3)))
      (and (= a b c)
@@ -232,6 +247,7 @@
           (= b c a)
           (= c a b)
           (= c b a)))
+   (= (make-yfi :inches 5) (+ 2 3) (+ (make-yfi :inches 2) (make-yfi :inches 3)))
    (let ((random-state (make-random-state t)))
      (dotimes (i 100 t)
        (let* ((length (random 200 random-state))

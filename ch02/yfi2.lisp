@@ -1,11 +1,11 @@
 ;;;;   Hey, Emacs, this is a -*- Mode: Lisp; Syntax: Common-Lisp -*- file!
 ;;;;
-;;;;   Lisp is the medium of choice for people who enjoy free style and flexibility.
-;;;;   -- Gerald Jay Sussman
+;;;;   Lisp isn't a language, it's a building material.
+;;;;   -- Alan Kay
 ;;;;
-;;;;   Name:               yfi.lisp
+;;;;   Name:               yfi2.lisp
 ;;;;
-;;;;   Started:            Sat May  4 03:44:33 2024
+;;;;   Started:            Thu Jul 13 02:45:09 2023
 ;;;;   Modifications:
 ;;;;
 ;;;;   Purpose:
@@ -21,17 +21,17 @@
 ;;;;
 ;;;;   Example:
 ;;;;
-;;;;   Notes: Redesign to fulfill exercise in the book. No need for compatibility with integers.
+;;;;   Notes: Overly ambitious design that tried to allow interplay between YFI instances and integers.
 ;;;;
 ;;;;
 (load "/home/slytobias/lisp/packages/core.lisp")
 
-(defpackage :yfi
+(defpackage :yfi2
   (:use :common-lisp :core)
   (:export :yfi :make-yfi :length :inches :feet :yards := :+)
   (:shadow :+ := :length))
 
-(in-package :yfi)
+(in-package :yfi2)
 
 (defclass yfi ()
   ((length :reader length :initarg :length :initform 0)))
@@ -93,34 +93,28 @@
   (print-unreadable-object (yfi stream :type t)
     (format stream "yards: ~D feet: ~D inches: ~D" (yards yfi) (feet yfi) (inches yfi))))
 
+(defmethod length ((n integer)) n)
+
+(defun add (yfi1 yfi2)
+  (make-instance 'yfi :length (cl:+ (length yfi1) (length yfi2))))
+
 (let ((zero (make-yfi 0)))
   (defun + (&rest objs)
-    (reduce #'(lambda (sum yfi)
-                (make-instance 'yfi :length (cl:+ (length sum) (length yfi))))
-            objs
-            :initial-value zero)))
+    (reduce #'add objs :initial-value zero)))
 
-;; (let ((zero (make-yfi 0)))
-;;   (defun + (&rest objs)
-;;     (reduce (compose (partial #'make-instance 'yfi :length)
-;;                      (compose (partial #'apply #'cl:+)
-;;                               (partial #'mapcar #'length) #'list))
-;;             objs
-;;             :initial-value zero)))
+(defun equals (yfi1 yfi2)
+  (cl:= (length yfi1) (length yfi2)))
 
-(defun = (yfi &rest yfis)
-  (every #'(lambda (elt) (cl:= (length yfi) (length elt))) yfis))
-
-;; (defun = (yfi &rest yfis)
-;;   (every (compose (partial #'cl:= (length yfi)) #'length) yfis))
+(defun = (obj &rest objs)
+  (every #'(lambda (elt) (equals obj elt)) objs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defpackage :yfi-keys
+(defpackage :yfi-keys2
   (:use :common-lisp :core :yfi)
   (:shadowing-import-from :yfi :length := :+)
   (:shadow :make-yfi))
 
-(in-package :yfi-keys)
+(in-package :yfi-keys2)
 
 (defun make-yfi (&key (inches 0) (feet 0) (yards 0))
   (yfi:make-yfi yards feet inches))
