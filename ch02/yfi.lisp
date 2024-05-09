@@ -94,18 +94,18 @@
     (format stream "yards: ~D feet: ~D inches: ~D" (yards yfi) (feet yfi) (inches yfi))))
 
 (let ((zero (make-yfi 0)))
-  (defun + (&rest objs)
+  (defun + (&rest yfis)
     (reduce #'(lambda (sum yfi)
                 (make-instance 'yfi :length (cl:+ (length sum) (length yfi))))
-            objs
+            yfis
             :initial-value zero)))
 
 ;; (let ((zero (make-yfi 0)))
-;;   (defun + (&rest objs)
+;;   (defun + (&rest yfis)
 ;;     (reduce (compose (partial #'make-instance 'yfi :length)
 ;;                      (compose (partial #'apply #'cl:+)
 ;;                               (partial #'mapcar #'length) #'list))
-;;             objs
+;;             yfis
 ;;             :initial-value zero)))
 
 (defun = (yfi &rest yfis)
