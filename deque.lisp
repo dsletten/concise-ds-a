@@ -292,8 +292,8 @@
 
 (defmethod dequeue ((dq persistent-linked-deque))
   (with-slots (front rear count) dq
-    (let ((new-deque (if (null (rest front))
-                         (if (null (rest rear))
+    (let ((new-deque (if (singlep front)
+                         (if (singlep rear)
                              (make-empty-persistent-queue dq)
                              (initialize-linked-queue dq (rest (cl:reverse rear)) (cl:list (rear dq)) (1- count)))
                          (initialize-linked-queue dq (rest front) rear (1- count)))) )
@@ -301,8 +301,8 @@
 
 (defmethod dequeue* ((dq persistent-linked-deque))
   (with-slots (front rear count) dq
-    (let ((new-deque (if (null (rest rear))
-                         (if (null (rest front))
+    (let ((new-deque (if (singlep rear)
+                         (if (singlep front)
                              (make-empty-persistent-queue dq)
                              (initialize-linked-queue dq (cl:list (front dq)) (rest (cl:reverse front)) (1- count)))
                          (initialize-linked-queue dq front (rest rear) (1- count)))) )

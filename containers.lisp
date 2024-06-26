@@ -74,8 +74,7 @@
 (defgeneric emptyp (container)
   (:documentation "Is the container empty?"))
 (defmethod emptyp ((c container))
-  (declare (ignore c))
-  (error "CONTAINER does not implement EMPTYP"))
+  (zerop (size c)))
 
 (defgeneric clear (container)
   (:documentation "Remove all elements from the container. No effect if already empty."))

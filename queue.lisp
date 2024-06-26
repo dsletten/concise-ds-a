@@ -78,9 +78,6 @@
   ()
   (:documentation "A queue is a dispenser holding a sequence of elements that allows insertions only at one end (the rear) and deletions and access to elements at the other end (the front) (FIFO)."))
 
-(defmethod emptyp ((q queue))
-  (zerop (size q)))
-
 (defmethod clear ((q queue))
   (loop until (emptyp q) do (dequeue q)))
 
@@ -563,7 +560,7 @@
 
 (defmethod dequeue ((q persistent-linked-queue))
   (with-slots (front rear count) q
-    (if (null (rest front))
+    (if (singlep front)
         (values (initialize-linked-queue q (cl:reverse rear) '() (1- count)) (front q))
         (values (initialize-linked-queue q (rest front) rear (1- count)) (front q)))) )
 

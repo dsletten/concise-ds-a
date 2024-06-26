@@ -549,9 +549,6 @@
   (with-slots (store) l
     (length store)))
 
-(defmethod emptyp ((l array-list))
-  (zerop (size l)))
-
 (defmethod clear ((l array-list))
   (with-slots (store) l
     (setf (fill-pointer store) 0)))
@@ -1047,7 +1044,7 @@
                (setf rear nil))))
           (t (let ((parent (nthcdr (1- i) front)))
 	       (prog1 (excise-child parent)
-		 (when (null (rest parent))
+		 (when (singlep parent)
 		   (setf rear parent)))) ))))
 (defmethod delete :after ((l singly-linked-list-x) (i integer))
   (declare (ignore i))
@@ -1069,7 +1066,7 @@
              (when (null front)
                (setf rear nil))))
 	  (t (prog1 (excise-node doomed)
-               (when (null (rest doomed))
+               (when (singlep doomed)
                  (setf rear doomed)))) )))
 (defmethod delete-node :after ((l singly-linked-list-x) (doomed cons))
   (declare (ignore doomed))
@@ -1082,7 +1079,7 @@
 (defmethod delete-child ((l singly-linked-list-x) (parent cons))
   (with-slots (rear) l
     (prog1 (excise-child parent)
-      (when (null (rest parent))
+      (when (singlep parent)
         (setf rear parent)))) )
 (defmethod delete-child :after ((l singly-linked-list-x) (parent cons))
   (declare (ignore parent))
@@ -2519,9 +2516,6 @@
   (with-slots (store) l
     (hash-table-count store)))
 
-(defmethod emptyp ((l hash-table-list))
-  (zerop (size l)))
-
 (defmethod clear ((l hash-table-list))
   (with-slots (store) l
     (clrhash store)))
@@ -2715,9 +2709,6 @@
 (defmethod size ((l hash-table-list-z))
   (with-slots (store) l
     (hash-table-count store)))
-
-(defmethod emptyp ((l hash-table-list-z))
-  (zerop (size l)))
 
 (defmethod clear ((l hash-table-list-z))
   (with-slots (store erots) l
@@ -3359,7 +3350,7 @@
 (defmethod has-next ((i singly-linked-list-list-iterator))
   (with-slots (cursor) i
     (not (or (null cursor)
-             (null (rest cursor)))) ))
+             (singlep cursor))) ))
 
 (defmethod has-previous ((i singly-linked-list-list-iterator))
   (with-slots (list cursor head) i
@@ -3664,7 +3655,7 @@
 
 (defmethod has-next ((i persistent-list-list-iterator))
   (with-slots (cursor) i
-    (not (null (rest cursor)))) )
+    (not (singlep cursor))) )
 
 (defmethod has-previous ((i persistent-list-list-iterator))
   (with-slots (history) i

@@ -98,9 +98,6 @@
   (with-slots (store) s
     (length store)))
 
-(defmethod emptyp ((s array-stack))
-  (zerop (size s)))
-
 (defmethod clear ((s array-stack))
   (with-slots (store) s
     (setf (fill-pointer store) 0)))
@@ -163,9 +160,6 @@
 (defmethod size ((s hash-table-stack))
   (with-slots (store) s
     (hash-table-count store)))
-
-(defmethod emptyp ((s hash-table-stack))
-  (zerop (size s)))
 
 (defmethod clear ((s hash-table-stack))
   (with-slots (store) s
