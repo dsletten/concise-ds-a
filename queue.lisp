@@ -93,7 +93,7 @@
 
 ;;;
 ;;;    DEQUEUE should ensure that reference to object being removed from queue is actually removed in order to
-;;;    allow the object to be GC'd as eligible.
+;;;    allow the object to be eligible for GC.
 ;;;    
 (defgeneric dequeue (queue)
   (:documentation "Remove an object from the front of the queue"))
@@ -288,7 +288,7 @@
 
 (defmethod enqueue ((q linked-queue) obj)
   (with-slots (front rear count) q
-    (let ((node (cl:list obj)))
+    (let ((node (cons obj nil)))
       (cond ((emptyp q)
              (assert (null rear) () "Queue is in illegal state")
              (setf rear (setf front node)))
@@ -328,7 +328,7 @@
 
 (defmethod enqueue ((q circular-queue) obj)
   (with-slots (index count) q
-    (let ((node (cl:list obj)))
+    (let ((node (cons obj nil)))
       (cond ((null index) (setf index node
                                 (rest index) node))
             (t (setf (rest node) (rest index)
@@ -555,7 +555,7 @@
 (defmethod enqueue ((q persistent-linked-queue) obj)
   (with-slots (front rear count) q
     (if (emptyp q)
-        (initialize-linked-queue q (cl:list obj) '() 1)
+        (initialize-linked-queue q (cons obj nil) '() 1)
         (initialize-linked-queue q front (cons obj rear) (1+ count)))) )
 
 (defmethod dequeue ((q persistent-linked-queue))
