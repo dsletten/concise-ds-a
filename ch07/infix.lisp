@@ -32,7 +32,7 @@
 ;;;;   TODO: Implement exponentiation (right-associative!) and unary +/- in EVAL-INFIX.
 ;;;;
 ;;;;
-;(load "/home/slytobias/lisp/packages/lang.lisp")
+;(load "/home/slytobias/lisp/packages/core.lisp")
 (load "/home/slytobias/lisp/packages/test.lisp")
 (load "/home/slytobias/lisp/books/Concise/containers.lisp")
 
@@ -91,6 +91,10 @@
 ;; 10
 
 ;;;
+;;;    Sedgewick Algorithms 4e pg. 129
+;;;    Must be fully parenthesized.
+;;;    
+;;;
 ;;;    Slightly different from prefix/postfix version. Must handle ().
 ;;;    
 (defun read-token (stream)
@@ -98,10 +102,6 @@
     ((#\( #\)) (intern (string (read-char stream))))
     (otherwise (read stream nil nil))))
 
-;;;
-;;;    Sedgewick Algorithms 4e pg. 129
-;;;    Must be fully parenthesized.
-;;;    
 (defun stack-eval-infix (s)
   (let ((stream (make-string-input-stream s))
         (operator-stack (make-instance 'linked-stack :type 'symbol))

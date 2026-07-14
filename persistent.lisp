@@ -482,3 +482,155 @@
   (with-slots (rear) dq
     (first rear)))
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+;;;
+;;;    CURSOR
+;;;
+(defclass cursor ()
+  ((done :initarg :done :documentation "A function that determines whether traversal is complete.")
+   (current :initarg :current :documentation "A function that yields the current element of the collection.")
+   (advance :initarg :advance :documentation "A function that moves to the next element if any.")))
+
+;;;
+;;;    ITERATOR
+;;;
+;;;    Design conflict
+;;;    I.  Put fewer details on abstract ITERATOR allowing wider variety of subclasses.
+;;;        For example, PERSISTENT-LIST-ITERATOR can reasonably be a subclass if no
+;;;        EXPECTED-MODIFICATION-COUNT, no :AROUND methods
+;;;    II. Eliminate duplication by moving EXPECTED-MODIFICATION-COUNT, :AROUND methods up
+;;;        from subclasses. PERSISTENT-LIST-ITERATOR simply has EXPECTED-MODIFICATION-COUNT of 0???
+;;;        Kind of gross??
+;;;
+;;;
+;;;
+;;;    Use PARENTS stack for tree iterator (like HISTORY for SINGLY-LINKED-LIST LIST-ITERATOR)
+;;;    - Binary tree: push parent
+;;;    - Arbitrary tree: push parent + remaining children
+;;;    
+(defclass iterator ()
+  ((cursor :initarg :cursor))
+  (:documentation "External iterator for a collection."))
+
+(defgeneric done (iterator)
+  (:documentation "Is the traversal completed?"))
+(defmethod done ((i iterator))
+  (with-slots (cursor) i
+    (with-slots (done) cursor
+      (funcall done))))
+
+;;; FIRST, REWIND???
+(defgeneric current (iterator)
+  (:documentation "Returns the current element of the iterator traversal."))
+(defmethod current :around ((i iterator))
+  (if (done i)
+      (error "Iteration already finished")
+      (call-next-method)))
+(defmethod current ((i iterator))
+  (with-slots (cursor) i
+    (with-slots (current) cursor
+      (funcall current))))
+
+;;; Empty???
+(defgeneric next (iterator)
+  (:documentation "Advances iterator to the next element of the traversal. Returns that element or NIL if at end."))
+(defmethod next ((i iterator))
+  (with-slots (cursor) i
+    (cond ((done i) nil)
+          (t (with-slots (advance) cursor
+               (funcall advance))
+             (if (done i)
+                 nil
+                 (current i)))) ))
+
+;;;
+;;;    PERSISTENT-COLLECTION-ITERATOR
+;;;    
+(defclass persistent-collection-iterator (iterator) ())
+
+(defmethod next ((i persistent-collection-iterator))
+  (with-slots (cursor) i
+    (cond ((done i) i)
+          (t (with-slots (advance) cursor
+               (let ((new-iterator (funcall advance)))
+                 (if (done new-iterator)
+                     (values new-iterator nil)
+                     (values new-iterator (current new-iterator)))) )))) )
+
+
+
+
+
+;;;
+;;;    PERSISTENT-LIST-STACK
+;;;
+;; (let ((empty (make-persistent-list))) ; FILL-ELT is never used!!
+;;   (defclass persistent-list-stack (persistent-stack)
+;;     ((list :initform empty))))
+
+;; (defmethod make-empty-persistent-stack ((q persistent-list-stack))
+;;   (make-instance 'persistent-list-stack :type (type q)))
+
+;; (defmethod size ((s persistent-list-stack))
+;;   (with-slots (list) s
+;;     (size list)))
+
+;; (defmethod emptyp ((s persistent-list-stack))
+;;   (with-slots (list) s
+;;     (emptyp list)))
+
+;; (flet ((initialize-stack (s list)
+;;          (let ((new-stack (make-empty-persistent-stack s)))
+;;            (with-slots ((new-list list)) new-stack
+;;              (setf new-list list))
+;;            new-stack)))
+;;   (defmethod push ((s persistent-list-stack) obj)
+;;     (with-slots (list) s
+;;       (initialize-stack s (insert list 0 obj))))
+;;   (defmethod pop ((s persistent-list-stack))
+;;     (with-slots (list) s
+;;       (values (initialize-stack s (delete list 0)) (peek s)))) )
+
+;; (defmethod peek ((s persistent-list-stack))
+;;   (with-slots (list) s
+;;     (nth list 0)))
+
+
+
+
+
+
+
+
+;;;
+;;;    PERSISTENT-LIST-DEQUE
+;;;
+;; (defclass persistent-list-deque (persistent-deque persistent-list-queue) ())
+
+;; (defmethod make-empty-persistent-queue ((dq persistent-list-deque))
+;;   (make-instance 'persistent-list-deque :type (type dq)))
+
+;; (defmethod enqueue* ((dq persistent-list-deque) obj)
+;;   (with-slots (list) dq
+;;     (initialize-list-queue dq (insert list 0 obj))))
+
+;; (defmethod dequeue* ((dq persistent-list-deque))
+;;   (with-slots (list) dq
+;;     (values (initialize-list-queue dq (delete list -1)) (rear dq))))
+
+;; (defmethod rear ((dq persistent-list-deque))
+;;   (with-slots (list) dq
+;;     (nth list -1)))

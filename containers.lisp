@@ -34,7 +34,7 @@
 ;;;;   TODO:
 ;;;;    - Other methods: ELEMENTS
 ;;;;    - DISCHARGE method - CLEAR + return elts
-(load "/home/slytobias/lisp/packages/core.lisp")
+(load "/home/slytobias/lisp/packages/core")
 
 (defpackage :containers 
   (:use :common-lisp :core)
@@ -53,8 +53,9 @@
            :list :fill-elt :add :append :insert :delete :nth :index :reverse :slice
            :array-list :singly-linked-list :doubly-linked-list :hash-table-list :persistent-list
            :deque :dll-deque :hash-table-deque :enqueue* :dequeue* :rear
+           :persistent-deque :persistent-linked-deque :persistent-list-deque
            :list-iterator :remove :current-index :has-next :has-previous)
-  (:shadow :type :emptyp :push :pop :list :nth :delete :remove :fill :reverse :append))
+  (:shadow :type :emptyp :equals :push :pop :list :nth :delete :remove :fill :reverse :append))
 
 (in-package :containers)
 

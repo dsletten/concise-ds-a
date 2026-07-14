@@ -100,7 +100,7 @@
 
 (defmethod clear ((s array-stack))
   (with-slots (store) s
-    (setf (fill-pointer store) 0)))
+    (setf (fill-pointer store) 0))) ; Does not allow GC of elts???
 
 (defmethod push ((s array-stack) obj)
   (with-slots (store) s

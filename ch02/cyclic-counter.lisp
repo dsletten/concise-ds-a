@@ -73,6 +73,11 @@
 (defmethod advance ((c counter) &optional n)
   (declare (ignore c n))
   (error "COUNTER does not implement ADVANCE"))
+(defmethod advance :around ((c counter) &optional (n 1)) ; Tests allow this!
+  (declare (ignore c))
+  (if (not (plusp n))
+      (error "Invalid step: ~D" n)
+      (call-next-method)))
 
 (defgeneric set (counter n)
   (:documentation "Set the COUNTER to N."))
